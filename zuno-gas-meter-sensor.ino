@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Comment this out to turn off debug output on serial board.
-#define UART Serial
+// #define UART Serial
 
 // Trying to use EM4 sleep mode, doesn't appear to work
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -444,7 +444,6 @@ void setup() {
 
     // Initialise the reading
     init_reading();
-
 
     // Configure pin 18 for an interrupt
     zunoEM4EnablePinWakeup(PULSE_PIN);     // Not needed, according to ref,
