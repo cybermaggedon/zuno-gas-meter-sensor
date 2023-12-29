@@ -301,7 +301,7 @@ ZUNO_SETUP_CONFIGPARAMETERS(
         ZUNO_CONFIG_PARAMETER_INFO(
             "Initial meter reading",
             "Specifies initial meter reading at time of install",
-            0, 4000000, 0
+            0, 100000000, 0
         ),
         ZUNO_CONFIG_PARAMETER_INFO(
             "Meter report period",
@@ -311,12 +311,12 @@ ZUNO_SETUP_CONFIGPARAMETERS(
         ZUNO_CONFIG_PARAMETER_INFO(
             "Pulse debounce time",
             "Specifies period in milliseconds for ignored pulses",
-            0, 10000, 5000
+            0, 30000, 5000
         ),
         ZUNO_CONFIG_PARAMETER_INFO(
             "Reading increment per pulse",
             "Specifies the reading incremement to apply per pulse",
-            1, 100000, 1
+            1, 1000000, 1
         )
 );
 
@@ -413,7 +413,7 @@ void interrupt() {
 
   // Increase the reading.  This increases a delta value, don't want any
   // slow EEPROM type stuff happening in this interrupt function.
-  inc_reading(1);
+  inc_reading(pulse_increment);
 
 }
 
