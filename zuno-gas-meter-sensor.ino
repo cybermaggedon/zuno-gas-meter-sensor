@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Comment this out to turn off debug output on serial board.
-#define UART Serial
+//#define UART Serial
 
 // Trying to use EM4 sleep mode, doesn't appear to work
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -178,7 +178,7 @@ enum{
 
 // When enabled, outputs sleep/wake messages and turns on the LED when
 // awake.
-#define SLEEP_WAKE_DEBUG_HANDLERS 1
+//#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
 /****************************************************************************/
 /* Configuration values
@@ -203,6 +203,9 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
 
     if (param == meter_report_period) {
         meter_report_period = value;
+
+	// Set timer
+        zunoSetCustomWUPTimer(meter_report_period);
 #ifdef UART
         UART.print("Meter report period = ");
         UART.println(meter_report_period);
@@ -522,8 +525,8 @@ void setup() {
     pinMode(PULSE_PIN, INPUT_PULLUP);      // Pin 18 pull-up mode
     attachInterrupt(PULSE_PIN, interrupt, FALLING); // Falling interrupt
     
-    // Wake up in a couple of seeconds and provide an initial report
-    zunoSetCustomWUPTimer(2);
+    // Wake up in a few seeconds and provide an initial report
+    zunoSetCustomWUPTimer(10);
 //    zunoLockSleep();                       // Probably not needed
     zunoSendDeviceToSleep(SLEEP_MODE);     // Also probably not needed
 
