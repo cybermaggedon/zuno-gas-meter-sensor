@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Comment this out to turn off debug output on serial board.
-// #define UART Serial
+#define UART Serial
 
 // Trying to use EM4 sleep mode, doesn't appear to work
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -176,6 +176,59 @@ enum{
 // this because EEPROM writes aren't an infinite resource.
 #define USE_EEPROM 1
 
+// When enabled, outputs sleep/wake messages and turns on the LED when
+// awake.
+#define SLEEP_WAKE_DEBUG_HANDLERS 1
+
+/****************************************************************************/
+/* Configuration values
+/****************************************************************************/
+
+DWORD initial_meter_reading;
+DWORD meter_report_period;
+DWORD debounce_time;
+DWORD pulse_increment;
+boolean reading_valid = false;
+
+void config_parameter_changed(uint8_t param, uint32_t value) {
+
+    if (param == INITIAL_METER_READING) {
+        initial_meter_reading = value;
+        reading_valid = false;         // This triggers a reset of the meter
+#ifdef UART
+        UART.print("Initial reading config = ");
+        UART.println(initial_meter_reading);
+#endif
+    }
+
+    if (param == meter_report_period) {
+        meter_report_period = value;
+#ifdef UART
+        UART.print("Meter report period = ");
+        UART.println(meter_report_period);
+#endif
+    }
+
+    if (param == DEBOUNCE_TIME) {
+        debounce_time = value;
+#ifdef UART
+        UART.print("Pulse debounce time = ");
+        UART.println(debounce_time);
+#endif
+    }
+
+    if (param == PULSE_INCREMENT) {
+        pulse_increment = value;
+#ifdef UART
+        UART.print("Pulse increment = ");
+        UART.println(pulse_increment);
+#endif
+    }
+
+}
+
+ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
+
 /****************************************************************************/
 /* State implementation: EEPROM version
 /****************************************************************************/
@@ -184,9 +237,6 @@ enum{
 
 DWORD reading;
 DWORD reading_delta;
-boolean reading_valid = false;
-DWORD debounce_time;
-DWORD pulse_increment;
 
 DWORD get_reading() {
 
@@ -217,7 +267,7 @@ void init_reading() {
   DWORD init_value;
   DWORD init_copy;
 
-  init_value = zunoLoadCFGParam(INITIAL_METER_READING);
+  init_value = initial_meter_reading;
   EEPROM.get(INIT_COPY_ADDRESS, &init_copy, sizeof(init_copy));
 
   if (init_value != init_copy) { 
@@ -237,8 +287,6 @@ void init_reading() {
 
   reading_delta = 0;
   reading_valid = true;
-  debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
-  pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
 
 }
 
@@ -250,7 +298,6 @@ void init_reading() {
 
 DWORD reading;
 DWORD reading_delta;
-boolean reading_valid = false;
 DWORD debounce_time;
 DWORD pulse_increment;
 
@@ -277,11 +324,9 @@ void reset_reading() {
 }
 
 void init_reading() {
-  reading = zunoLoadCFGParam(INITIAL_METER_READING);
+  reading = initial_meter_reading;
   reading_delta = 0;
   reading_valid = true;
-  debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
-  pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
 }
 
 #endif
@@ -290,11 +335,14 @@ void init_reading() {
 /* Z-Wave definitions
 /****************************************************************************/
 
+// Enable advanced options
+//ZUNO_ENABLE(WITH_CC_WAKEUP WITH_CC_BATTERY LOGGING_DBG LOGGING_UART=Serial SKETCH_FLAGS=16);
+
 // Device uses sleep mode (EM4)
 ZUNO_SETUP_SLEEPING_MODE(ZUNO_SLEEPING_MODE_SLEEPING);
 
 // Debug mode
-ZUNO_SETUP_DEBUG_MODE(DEBUG_ON);
+//ZUNO_SETUP_DEBUG_MODE(DEBUG_ON);
 
 // Configuration parameter definitions
 ZUNO_SETUP_CONFIGPARAMETERS(
@@ -417,8 +465,30 @@ void interrupt() {
 
 }
 
-// Core calls this on reset, or wake from EM4 state
+/****************************************************************************/
+/* Core lifecycle
+/****************************************************************************/
+
+#ifdef SLEEP_WAKE_DEBUG_HANDLERS
+void wake_handler(){
+    UART.println("*** WAKE!");
+    digitalWrite(LED_BUILTIN, 1);
+}
+
+void sleep_handler(){
+    UART.println("*** SLEEP!");
+    digitalWrite(LED_BUILTIN, 0);
+    zunoEM4EnablePinWakeup(PULSE_PIN);
+}
+#endif
+
+// Core calls this on reset
 void setup() {
+
+    initial_meter_reading = zunoLoadCFGParam(INITIAL_METER_READING);
+    meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
+    debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
+    pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
 
     // Debug stuff if debug is enabled
 #ifdef UART
@@ -433,13 +503,13 @@ void setup() {
     UART.println(wake_reason());
 
     UART.print("Initial reading config = ");
-    UART.println(zunoLoadCFGParam(INITIAL_METER_READING));
+    UART.println(initial_meter_reading);
     UART.print("Meter report period = ");
-    UART.println(zunoLoadCFGParam(METER_REPORT_PERIOD));
+    UART.println(meter_report_period);
     UART.print("Pulse debounce time = ");
-    UART.println(zunoLoadCFGParam(DEBOUNCE_TIME));
+    UART.println(debounce_time);
     UART.print("Pulse increment = ");
-    UART.println(zunoLoadCFGParam(PULSE_INCREMENT));
+    UART.println(pulse_increment);
 #endif
 
     // Initialise the reading
@@ -454,12 +524,18 @@ void setup() {
     
     // Wake up in a couple of seeconds and provide an initial report
     zunoSetCustomWUPTimer(2);
-    zunoLockSleep();                       // Probably not needed
+//    zunoLockSleep();                       // Probably not needed
     zunoSendDeviceToSleep(SLEEP_MODE);     // Also probably not needed
+
+#ifdef SLEEP_WAKE_DEBUG_HANDLERS
+    // Calls to wake/sleep handlers
+    zunoAttachSysHandler(ZUNO_HANDLER_SLEEP, 0, (void*) &sleep_handler);
+    zunoAttachSysHandler(ZUNO_HANDLER_WUP, 0, (void*) &wake_handler);
+#endif
 
 }
 
-// Loop, core calls this repeatedly while device is awake
+// Core calls this repeatedly while awake
 void loop() {
 
 #ifdef UART
@@ -528,7 +604,7 @@ void loop() {
         }
 
         // Set sleep for next meter report
-        zunoSetCustomWUPTimer(zunoLoadCFGParam(METER_REPORT_PERIOD));
+        zunoSetCustomWUPTimer(meter_report_period);
 
         // Send device to EM4 sleep state when it is ready to sleep
         zunoSendDeviceToSleep(SLEEP_MODE);
