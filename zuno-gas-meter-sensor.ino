@@ -193,12 +193,12 @@ uint32_t next_report_millis = 0;
 // This overflows on 31 bits.
 uint32_t since(DWORD then, DWORD now) {
 
-  uint32_t diff = now - then;
+    uint32_t diff = now - then;
 
-  // Deal with integer overflow (32-bit values)
-  if (diff > 2147483648) diff -= 2147483648;
+    // Deal with integer overflow (32-bit values)
+    if (diff > 2147483648) diff -= 2147483648;
 
-  return diff;
+    return diff;
 
 }
 
@@ -206,12 +206,12 @@ uint32_t since(DWORD then, DWORD now) {
 // Milliseconds in 32-bits ~= 50 days overflow
 bool after(DWORD then, DWORD when) {
 
-  uint32_t diff = when - then;
+    uint32_t diff = when - then;
 
-  // Deal with integer overflow (32-bit values)
-  if (diff > 2147483648) return false;
+    // Deal with integer overflow (32-bit values)
+    if (diff > 2147483648) return false;
 
-  return true;
+    return true;
 
 }
 
@@ -288,53 +288,53 @@ DWORD reading_delta;
 
 DWORD get_reading() {
 
-  if (!reading_valid)
-    init_reading();
+    if (!reading_valid)
+        init_reading();
 
-  if (reading_delta) {
-    reading += reading_delta;
-    reading_delta = 0;
-    EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
-  }
+    if (reading_delta) {
+        reading += reading_delta;
+        reading_delta = 0;
+        EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+    }
 
-  return reading;
+    return reading;
 }
 
 void inc_reading(DWORD value) {
-  reading_delta += value;
+    reading_delta += value;
 }
 
 void reset_reading() {
-  reading = 0;
-  reading_delta = 0;
-  EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+    reading = 0;
+    reading_delta = 0;
+    EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
 }
 
 void init_reading() {
 
-  DWORD init_value;
-  DWORD init_copy;
+    DWORD init_value;
+    DWORD init_copy;
 
-  init_value = initial_meter_reading;
-  EEPROM.get(INIT_COPY_ADDRESS, &init_copy, sizeof(init_copy));
+    init_value = initial_meter_reading;
+    EEPROM.get(INIT_COPY_ADDRESS, &init_copy, sizeof(init_copy));
 
-  if (init_value != init_copy) { 
+    if (init_value != init_copy) { 
 #ifdef UART
-    UART.println("Resetting EEPROM values");
+        UART.println("Resetting EEPROM values");
 #endif
-    EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
-    EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
+        EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
+        EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
 
-  }
+    }
 
-  EEPROM.get(READING_ADDRESS, &reading, sizeof(reading));
+    EEPROM.get(READING_ADDRESS, &reading, sizeof(reading));
 #ifdef UART
-  UART.print("Loading previous reading = ");
-  UART.println(reading);
+    UART.print("Loading previous reading = ");
+    UART.println(reading);
 #endif
 
-  reading_delta = 0;
-  reading_valid = true;
+    reading_delta = 0;
+    reading_valid = true;
 
 }
 
@@ -349,30 +349,30 @@ DWORD reading_delta;
 
 DWORD get_reading() {
 
-  if (!reading_valid)
-    init_reading();
+    if (!reading_valid)
+        init_reading();
 
-  if (reading_delta) {
-    reading += reading_delta;
-    reading_delta = 0;
-  }
+    if (reading_delta) {
+        reading += reading_delta;
+        reading_delta = 0;
+    }
 
-  return reading;
+    return reading;
 }
 
 void inc_reading(DWORD value) {
-  reading_delta += value;
+    reading_delta += value;
 }
 
 void reset_reading() {
-  reading = 0;
-  reading_delta = 0;
+    reading = 0;
+    reading_delta = 0;
 }
 
 void init_reading() {
-  reading = initial_meter_reading;
-  reading_delta = 0;
-  reading_valid = true;
+    reading = initial_meter_reading;
+    reading_delta = 0;
+    reading_valid = true;
 }
 
 #endif
@@ -392,26 +392,26 @@ ZUNO_SETUP_SLEEPING_MODE(ZUNO_SLEEPING_MODE_SLEEPING);
 
 // Configuration parameter definitions
 ZUNO_SETUP_CONFIGPARAMETERS(
-        ZUNO_CONFIG_PARAMETER_INFO(
-            "Initial meter reading",
-            "Specifies initial meter reading at time of install",
-            0, 100000000, 0
-        ),
-        ZUNO_CONFIG_PARAMETER_INFO(
-            "Meter report period",
-            "Specifies period in seconds between meter reports",
-            15, 3600, 60
-        ),
-        ZUNO_CONFIG_PARAMETER_INFO(
-            "Pulse debounce time",
-            "Specifies period in milliseconds for ignored pulses",
-            0, 30000, 5000
-        ),
-        ZUNO_CONFIG_PARAMETER_INFO(
-            "Reading increment per pulse",
-            "Specifies the reading incremement to apply per pulse",
-            1, 1000000, 1
-        )
+    ZUNO_CONFIG_PARAMETER_INFO(
+        "Initial meter reading",
+        "Specifies initial meter reading at time of install",
+        0, 100000000, 0
+    ),
+    ZUNO_CONFIG_PARAMETER_INFO(
+        "Meter report period",
+        "Specifies period in seconds between meter reports",
+        15, 3600, 60
+    ),
+    ZUNO_CONFIG_PARAMETER_INFO(
+        "Pulse debounce time",
+        "Specifies period in milliseconds for ignored pulses",
+        0, 30000, 5000
+    ),
+    ZUNO_CONFIG_PARAMETER_INFO(
+        "Reading increment per pulse",
+        "Specifies the reading incremement to apply per pulse",
+        1, 1000000, 1
+    )
 );
 
 // Channels
@@ -446,23 +446,23 @@ uint32_t em4_count = 0;
 // and EXT_EM4 increment the em4_count so can check whether EM4 state is
 // achieved.
 String wake_reason() {
-  byte wakeUpReason = zunoGetWakeReason();
-  switch (wakeUpReason) {
+    byte wakeUpReason = zunoGetWakeReason();
+    switch (wakeUpReason) {
     case ZUNO_WAKEUP_REASON_POR: return "power-on-reset";
     case ZUNO_WAKEUP_REASON_PIN: return "reset-button";
     case ZUNO_WAKEUP_REASON_EXT_EM4:
-      em4_count++;
-      return "ext-interrupt-em4";
+        em4_count++;
+        return "ext-interrupt-em4";
     case ZUNO_WAKEUP_REASON_EXT_EM2: return "ext-interrupt-em2";
     case ZUNO_WAKEUP_REASON_WUT_EM4:
-      em4_count++;
-      return "wakeup-timer-em4";
+        em4_count++;
+        return "wakeup-timer-em4";
     case ZUNO_WAKEUP_REASON_WUT_EM2: return "wakeup-timer-em2";
     case ZUNO_WAKEUP_REASON_RADIO_EM2: return "flirs-packet-em2";
     case ZUNO_WAKEUP_REASON_WATCH_DOG: return "watchdog";
     case ZUNO_WAKEUP_REASON_SOFTRESET: return "soft-reset";
     default: return "not-defined";
-  }
+    }
 }
 
 // Returns true if the device was last woken by a wake-timer.
@@ -481,18 +481,18 @@ boolean woken_by_timer() {
 // No de-bounce on the button, so click can result in multiple increemnts
 void interrupt() {
 
-  DWORD now = millis();
+    DWORD now = millis();
 
-  // Ignore multiple pulses in the de-bounce window.  This deals with extra
-  // pulses in the reed-switch open/close
-  if (since(last_pulse_millis, now) < debounce_time) return;
+    // Ignore multiple pulses in the de-bounce window.  This deals with extra
+    // pulses in the reed-switch open/close
+    if (since(last_pulse_millis, now) < debounce_time) return;
 
-  // Pulse is accepted, remember pulse time
-  last_pulse_millis = now;
+    // Pulse is accepted, remember pulse time
+    last_pulse_millis = now;
 
-  // Increase the reading.  This increases a delta value, don't want any
-  // slow EEPROM type stuff happening in this interrupt function.
-  inc_reading(pulse_increment);
+    // Increase the reading.  This increases a delta value, don't want any
+    // slow EEPROM type stuff happening in this interrupt function.
+    inc_reading(pulse_increment);
 
 }
 
