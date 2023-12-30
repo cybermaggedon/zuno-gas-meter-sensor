@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Un-comment this to turn on debug output on serial board.
-#define UART Serial
+//#define UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep mode?
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -178,7 +178,7 @@ enum{
 
 // When enabled, outputs sleep/wake messages and turns on the LED when
 // awake.
-#define SLEEP_WAKE_DEBUG_HANDLERS 1
+//#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
 /****************************************************************************/
 /* Timing information
