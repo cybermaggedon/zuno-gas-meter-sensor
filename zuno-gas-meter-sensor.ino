@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Comment this out to turn off debug output on serial board.
-//#define UART Serial
+#define UART Serial
 
 // Trying to use EM4 sleep mode, doesn't appear to work
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -178,7 +178,53 @@ enum{
 
 // When enabled, outputs sleep/wake messages and turns on the LED when
 // awake.
-//#define SLEEP_WAKE_DEBUG_HANDLERS 1
+#define SLEEP_WAKE_DEBUG_HANDLERS 1
+
+/****************************************************************************/
+/* Timing information
+/****************************************************************************/
+
+// This stores the last time the pulse was received
+uint32_t last_pulse_millis = 1 << 31;
+uint32_t next_report_millis = 0;
+
+// Work out time since first value, allowing for the time to overflow.
+// Milliseconds in 32-bits ~= 50 days overflow
+// This overflows on 31 bits.
+uint32_t since(DWORD then, DWORD now) {
+
+  uint32_t diff = now - then;
+
+  // Deal with integer overflow (32-bit values)
+  if (diff > 2147483648) diff -= 2147483648;
+
+  return diff;
+
+}
+
+// Work out if when is after then, allowing for the time to overflow.
+// Milliseconds in 32-bits ~= 50 days overflow
+bool after(DWORD then, DWORD when) {
+
+  uint32_t diff = when - then;
+
+  // Deal with integer overflow (32-bit values)
+  if (diff > 2147483648) return false;
+
+  return true;
+
+}
+
+void next_report_seconds(DWORD secs) {
+
+    next_report_millis += 1000 * secs;
+
+#ifdef UART
+    UART.print("Next report set to = ");
+    UART.println(next_report_millis);
+#endif
+
+}
 
 /****************************************************************************/
 /* Configuration values
@@ -201,11 +247,10 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
 #endif
     }
 
-    if (param == meter_report_period) {
+    if (param == METER_REPORT_PERIOD) {
         meter_report_period = value;
-
-	// Set timer
-        zunoSetCustomWUPTimer(meter_report_period);
+        next_report_seconds(meter_report_period);
+        
 #ifdef UART
         UART.print("Meter report period = ");
         UART.println(meter_report_period);
@@ -301,8 +346,6 @@ void init_reading() {
 
 DWORD reading;
 DWORD reading_delta;
-DWORD debounce_time;
-DWORD pulse_increment;
 
 DWORD get_reading() {
 
@@ -434,33 +477,18 @@ boolean woken_by_timer() {
         (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM2);
 }
 
-// This stores the last time the pulse was received
-uint32_t moment = 1 << 31;
-
-// When a pulse is received, store the time
-void remember() {
-  moment = millis();
-}
-
-// Work out time since last pulse, allowing for the time to wrap.
-uint32_t since() {
-  uint32_t now = millis();
-  uint32_t then = moment;
-  uint32_t diff = now - then;
-  if (diff > 65536) diff -= 65536;
-  return diff;
-}
-
 // Interrupt handler for button on pin 18, increments the interrupt count.
 // No de-bounce on the button, so click can result in multiple increemnts
 void interrupt() {
 
+  DWORD now = millis();
+
   // Ignore multiple pulses in the de-bounce window.  This deals with extra
   // pulses in the reed-switch open/close
-  if (since() < debounce_time) return;
+  if (since(last_pulse_millis, now) < debounce_time) return;
 
   // Pulse is accepted, remember pulse time
-  remember();
+  last_pulse_millis = now;
 
   // Increase the reading.  This increases a delta value, don't want any
   // slow EEPROM type stuff happening in this interrupt function.
@@ -472,18 +500,20 @@ void interrupt() {
 /* Core lifecycle
 /****************************************************************************/
 
-#ifdef SLEEP_WAKE_DEBUG_HANDLERS
 void wake_handler(){
+#ifdef SLEEP_WAKE_DEBUG
     UART.println("*** WAKE!");
+#endif
     digitalWrite(LED_BUILTIN, 1);
 }
 
 void sleep_handler(){
+#ifdef SLEEP_WAKE_DEBUG
     UART.println("*** SLEEP!");
+#endif
     digitalWrite(LED_BUILTIN, 0);
     zunoEM4EnablePinWakeup(PULSE_PIN);
 }
-#endif
 
 // Core calls this on reset
 void setup() {
@@ -526,27 +556,34 @@ void setup() {
     attachInterrupt(PULSE_PIN, interrupt, FALLING); // Falling interrupt
     
     // Wake up in a few seeconds and provide an initial report
-    zunoSetCustomWUPTimer(10);
-//    zunoLockSleep();                       // Probably not needed
+    next_report_seconds(5);
     zunoSendDeviceToSleep(SLEEP_MODE);     // Also probably not needed
 
-#ifdef SLEEP_WAKE_DEBUG_HANDLERS
     // Calls to wake/sleep handlers
     zunoAttachSysHandler(ZUNO_HANDLER_SLEEP, 0, (void*) &sleep_handler);
     zunoAttachSysHandler(ZUNO_HANDLER_WUP, 0, (void*) &wake_handler);
-#endif
 
 }
 
 // Core calls this repeatedly while awake
 void loop() {
 
+    DWORD now = millis();
+
 #ifdef UART
     // Some debug output
 
     // Milliseconds since boot
     UART.print("uptime = ");
-    UART.print(millis());
+    UART.print(now);
+
+    // Milliseconds since boot
+    UART.print(" - next-report = ");
+    UART.print(next_report_millis);
+
+    if (after(next_report_millis, now)) {
+        UART.print(" (!)");
+    }
 
     // Loop counter.  Should zero when device goes into EM4 state
     UART.print(" - loop count = ");
@@ -562,7 +599,7 @@ void loop() {
 
     // Time since last interrupt in millis.
     UART.print(" - since = ");
-    UART.print(since());
+    UART.print(since(last_pulse_millis, now));
 
     // Dump out last wake reason
     UART.print(" - ");
@@ -590,9 +627,7 @@ void loop() {
 
 #endif
 
-    // Woken by a timer, and also prevented from sleeping?  Good place
-    // to do a Z-Wave sensor report.
-    if(woken_by_timer() && zunoIsSleepLocked()) {
+    if (after(next_report_millis, now)) {
 
         // Send channel reports
         if (zunoInNetwork()) {
@@ -606,18 +641,27 @@ void loop() {
 #endif
         }
 
-        // Set sleep for next meter report
-        zunoSetCustomWUPTimer(meter_report_period);
-
-        // Send device to EM4 sleep state when it is ready to sleep
-        zunoSendDeviceToSleep(SLEEP_MODE);
+        next_report_seconds(meter_report_period);
 
     }
 
+    // Before leaving the loop, work out how much time is needed to
+    // the next report, and set the wake-up timer.
+    DWORD secs = ((next_report_millis - now) / 1000) + 1;
+
+    // Set wake-up timer
+    zunoSetCustomWUPTimer(secs);
+
+#ifdef UART
+    UART.print("Set custom wake-up for = ");
+    UART.println(secs);
+#endif
+
+    // Send device to EM4 sleep state when it is ready to sleep
     zunoSendDeviceToSleep(SLEEP_MODE);
 
     // Increment loop count
-    loop_count++; // Increment variable
+    loop_count++;
 
     // Wait 1 second before leaving loop
     delay(1000);
