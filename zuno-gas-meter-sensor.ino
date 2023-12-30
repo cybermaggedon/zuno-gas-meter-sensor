@@ -152,7 +152,7 @@ Licence
 #define PULSE_PIN 18
 
 // Un-comment this to turn on debug output on serial board.
-//#define UART Serial
+#define UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep mode?
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -230,6 +230,22 @@ void next_report_seconds(DWORD secs) {
 
 }
 
+void set_wakeup_timer() {
+
+    // Before leaving the loop, work out how much time is needed to
+    // the next report, and set the wake-up timer.
+    DWORD secs = ((next_report_millis - millis()) / 1000) + 1;
+
+    // Set wake-up timer
+    zunoSetCustomWUPTimer(secs);
+
+#ifdef UART
+    UART.print("Set custom wake-up for = ");
+    UART.println(secs);
+#endif
+
+}
+
 /****************************************************************************/
 /* Configuration values
 /****************************************************************************/
@@ -245,6 +261,11 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
     if (param == INITIAL_METER_READING) {
         initial_meter_reading = value;
         reading_valid = false;         // This triggers a reset of the meter
+
+        // Report new value in 2 seconds
+        next_report_millis = millis() + 5000;
+        set_wakeup_timer();
+
 #ifdef UART
         UART.print("Initial reading config = ");
         UART.println(initial_meter_reading);
@@ -253,7 +274,8 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
 
     if (param == METER_REPORT_PERIOD) {
         meter_report_period = value;
-        next_report_seconds(meter_report_period);
+        next_report_millis = millis() + 1000 * value;
+        set_wakeup_timer();
         
 #ifdef UART
         UART.print("Meter report period = ");
@@ -298,6 +320,7 @@ DWORD get_reading() {
     if (reading_delta) {
         reading += reading_delta;
         reading_delta = 0;
+        if (reading > 99999999) reading -= 100000000; // Number overflows like a gas meter does
         EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
     }
 
@@ -359,6 +382,7 @@ DWORD get_reading() {
     if (reading_delta) {
         reading += reading_delta;
         reading_delta = 0;
+        if (reading > 99999999) reading -= 99999999; // Number overflows like a gas meter does
     }
 
     return reading;
@@ -399,7 +423,7 @@ ZUNO_SETUP_CONFIGPARAMETERS(
     ZUNO_CONFIG_PARAMETER_INFO(
         "Initial meter reading",
         "Specifies initial meter reading at time of install",
-        0, 100000000, 0
+        0, 99999999, 0
     ),
     ZUNO_CONFIG_PARAMETER_INFO(
         "Meter report period",
@@ -653,17 +677,7 @@ void loop() {
 
     }
 
-    // Before leaving the loop, work out how much time is needed to
-    // the next report, and set the wake-up timer.
-    DWORD secs = ((next_report_millis - now) / 1000) + 1;
-
-    // Set wake-up timer
-    zunoSetCustomWUPTimer(secs);
-
-#ifdef UART
-    UART.print("Set custom wake-up for = ");
-    UART.println(secs);
-#endif
+    set_wakeup_timer();
 
     // Send device to EM4 sleep state when it is ready to sleep
     zunoSendDeviceToSleep(SLEEP_MODE);
