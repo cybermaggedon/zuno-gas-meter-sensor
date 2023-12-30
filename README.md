@@ -108,7 +108,7 @@ a reset at a safe time, and likely no information is lost.
 
 ## Licence
 
-    Z-Uno Gas Meter Sensor - Z-Wave sensor for a pulse gas meter
+    zuno-gas-meter-sensor - Z-Wave sensor for a pulse gas meter using Z-Uno
     Copyright (C) 2023-2024  cybermaggedon
 
     This program is free software: you can redistribute it and/or modify

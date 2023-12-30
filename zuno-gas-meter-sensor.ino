@@ -124,7 +124,7 @@ a reset at a safe time, and likely no information is lost.
 Licence
 =======
 
-    Z-Uno Gas Meter Sensor - Z-Wave sensor for a pulse gas meter
+    zuno-gas-meter-sensor - Z-Wave sensor for a pulse gas meter using Z-Uno
     Copyright (C) 2023-2024  cybermaggedon
 
     This program is free software: you can redistribute it and/or modify
@@ -151,10 +151,10 @@ Licence
 // Interrupt driven by an exteral pulse on pin 18.
 #define PULSE_PIN 18
 
-// Comment this out to turn off debug output on serial board.
-#define UART Serial
+// Un-comment this to turn on debug output on serial board.
+//#define UART Serial
 
-// Trying to use EM4 sleep mode, doesn't appear to work
+// Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep mode?
 #define SLEEP_MODE SLEEP_MODE_EM4
 
 // EEPROM addresses
@@ -184,8 +184,11 @@ enum{
 /* Timing information
 /****************************************************************************/
 
-// This stores the last time the pulse was received
+// This stores the last time the pulse was received, big negative number
+// so that the next pulse is counted.
 uint32_t last_pulse_millis = 1 << 31;
+
+// Time of next report
 uint32_t next_report_millis = 0;
 
 // Work out time since first value, allowing for the time to overflow.
@@ -215,6 +218,7 @@ bool after(DWORD then, DWORD when) {
 
 }
 
+// Set time of next report
 void next_report_seconds(DWORD secs) {
 
     next_report_millis += 1000 * secs;
@@ -501,15 +505,19 @@ void interrupt() {
 /****************************************************************************/
 
 void wake_handler(){
+#ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
     UART.println("*** WAKE!");
+#endif
 #endif
     digitalWrite(LED_BUILTIN, 1);
 }
 
 void sleep_handler(){
+#ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
     UART.println("*** SLEEP!");
+#endif
 #endif
     digitalWrite(LED_BUILTIN, 0);
     zunoEM4EnablePinWakeup(PULSE_PIN);
