@@ -532,18 +532,18 @@ void wake_handler(){
 #ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
     UART.println("*** WAKE!");
-#endif
-#endif
     digitalWrite(LED_BUILTIN, 1);
+#endif
+#endif
 }
 
 void sleep_handler(){
 #ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
     UART.println("*** SLEEP!");
-#endif
-#endif
     digitalWrite(LED_BUILTIN, 0);
+#endif
+#endif
     zunoEM4EnablePinWakeup(PULSE_PIN);
 }
 
