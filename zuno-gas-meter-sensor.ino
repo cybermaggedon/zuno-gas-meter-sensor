@@ -82,6 +82,9 @@ Configuration v4:
   Reading increment per pulse (67): Specifies the reading incremement to
       apply per pulse (Default: 1)
 
+  Calorific value (68): Specifies the calorific value x100 e.g. for
+      40.1, specify 40100.   (Default: 38700)
+
 Command classes
 ---------------
 
@@ -152,7 +155,7 @@ Licence
 #define PULSE_PIN 18
 
 // Un-comment this to turn on debug output on serial board.
-//#define UART Serial
+#define UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep mode?
 #define SLEEP_MODE SLEEP_MODE_EM4
@@ -168,8 +171,9 @@ enum{
     INITIAL_METER_READING=64,   // Initial reading value only used at install
     METER_REPORT_PERIOD,        // Period (s) to send meter reports
     DEBOUNCE_TIME,              // Period in which to ignore multiple pulses
-    PULSE_INCREMENT             // Amount to increase the reading for each
+    PULSE_INCREMENT,            // Amount to increase the reading for each
                                 // pulse.
+    CALORIFIC_VALUE             // Calorific value of gas
 };
 
 // This allows EEPROM storage to be turned off during development.  I do
@@ -178,7 +182,7 @@ enum{
 
 // When enabled, outputs sleep/wake messages and turns on the LED when
 // awake.
-//#define SLEEP_WAKE_DEBUG_HANDLERS 1
+#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
 /****************************************************************************/
 /* Timing information
@@ -254,6 +258,8 @@ DWORD initial_meter_reading;
 DWORD meter_report_period;
 DWORD debounce_time;
 DWORD pulse_increment;
+DWORD calorific_value;
+
 boolean reading_valid = false;
 
 void config_parameter_changed(uint8_t param, uint32_t value) {
@@ -299,6 +305,14 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
 #endif
     }
 
+    if (param == CALORIFIC_VALUE) {
+        calorific_value = value;
+#ifdef UART
+        UART.print("Calorific value = ");
+        UART.println(calorific_value);
+#endif
+    }
+    
 }
 
 ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
@@ -316,6 +330,8 @@ DWORD get_reading() {
 
     if (!reading_valid)
         init_reading();
+
+   // reading_delta = random(20);
 
     if (reading_delta) {
         reading += reading_delta;
@@ -410,13 +426,13 @@ void init_reading() {
 /****************************************************************************/
 
 // Enable advanced options
-//ZUNO_ENABLE(WITH_CC_WAKEUP WITH_CC_BATTERY LOGGING_DBG LOGGING_UART=Serial SKETCH_FLAGS=16);
+ZUNO_ENABLE(WITH_CC_WAKEUP WITH_CC_BATTERY LOGGING_DBG LOGGING_UART=Serial SKETCH_FLAGS=16);
 
 // Device uses sleep mode (EM4)
 ZUNO_SETUP_SLEEPING_MODE(ZUNO_SLEEPING_MODE_SLEEPING);
 
 // Debug mode
-//ZUNO_SETUP_DEBUG_MODE(DEBUG_ON);
+ZUNO_SETUP_DEBUG_MODE(DEBUG_ON);
 
 // Configuration parameter definitions
 ZUNO_SETUP_CONFIGPARAMETERS(
@@ -452,6 +468,23 @@ ZUNO_SETUP_CHANNELS(
         METER_PRECISION_THREE_DECIMALS,    // 3 decimal places
         get_reading,                       // Reading 'get' function
         reset_reading                      // Reading 'reset' function
+    ),
+    ZUNO_METER(
+        ZUNO_METER_TYPE_GAS,               // Gas meter
+        METER_RESET_DISABLE,               // Provides meter reset function
+        ZUNO_METER_WATER_SCALE_KWH,        // Unit is kWh
+        METER_SIZE_FOUR_BYTES,             // 4-bytes precision
+        METER_PRECISION_THREE_DECIMALS,    // 3 decimal places
+        get_kwh,                           // Reading 'get' function
+        reset_reading                      // Reading 'reset' function
+    ),
+    ZUNO_METER(
+        ZUNO_METER_TYPE_GAS,               // Gas meter
+        METER_RESET_ENABLE,                // Provides meter reset function
+        ZUNO_METER_WATER_SCALE_WATT,       // Unit is cubic-meters
+        METER_SIZE_FOUR_BYTES,             // 4-bytes precision
+        METER_PRECISION_THREE_DECIMALS,    // 3 decimal places
+        get_watt                           // Reading 'get' function
     )
 );
 
@@ -554,6 +587,7 @@ void setup() {
     meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
     debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
     pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
+    calorific_value = zunoLoadCFGParam(CALORIFIC_VALUE);
 
     // Debug stuff if debug is enabled
 #ifdef UART
@@ -575,6 +609,8 @@ void setup() {
     UART.println(debounce_time);
     UART.print("Pulse increment = ");
     UART.println(pulse_increment);
+    UART.print("Calorific value = ");
+    UART.println(calorific_value);
 #endif
 
     // Initialise the reading
