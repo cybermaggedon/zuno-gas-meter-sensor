@@ -87,6 +87,7 @@ Command classes
 
 - METER V6:
   - Gas consumption (Cubic meters)
+  - Gas meter pulse count
 - CONFIGURATION V4
 - BATTERY V1
 - WAKE UP V3
@@ -154,12 +155,14 @@ Licence
 // Un-comment this to turn on debug output on serial board.
 //#define UART Serial
 
-// Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep mode?
+// Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep
+// mode?
 #define SLEEP_MODE SLEEP_MODE_EM4
 
 // EEPROM addresses
 #define READING_ADDRESS (0x0)         // The last reading is stored here
-#define INIT_COPY_ADDRESS (0x4)       // This is a copy of the initial reading
+#define PULSE_COUNT_ADDRESS (0x4)     // Pulse count stored here
+#define INIT_COPY_ADDRESS (0x8)       // This is a copy of the initial reading
                                       // to help determine whether to
                                       // re-apply the setting.
 
@@ -310,7 +313,10 @@ ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
 #ifdef USE_EEPROM
 
 DWORD reading;
+DWORD pulses;
+
 DWORD reading_delta;
+DWORD pulses_delta;
 
 DWORD get_reading() {
 
@@ -327,7 +333,22 @@ DWORD get_reading() {
     return reading;
 }
 
+DWORD get_pulses() {
+
+    if (!reading_valid)
+        init_reading();
+
+    if (pulses_delta) {
+        pulses += pulses_delta;
+	      pulses_delta = 0;
+        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+    }
+
+    return pulses;
+}
+
 void inc_reading(DWORD value) {
+    pulses_delta += 1;
     reading_delta += value;
 }
 
@@ -335,6 +356,12 @@ void reset_reading() {
     reading = 0;
     reading_delta = 0;
     EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+}
+
+void reset_pulses() {
+    pulses = 0;
+    pulses_delta = 0;
+    EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
 }
 
 void init_reading() {
@@ -349,15 +376,24 @@ void init_reading() {
 #ifdef UART
         UART.println("Resetting EEPROM values");
 #endif
+
+	      pulses = 0;
+	
         EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
+        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
         EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
 
     }
 
     EEPROM.get(READING_ADDRESS, &reading, sizeof(reading));
+    EEPROM.get(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+
 #ifdef UART
     UART.print("Loading previous reading = ");
     UART.println(reading);
+    UART.print("Loading previous pulses = ");
+    UART.println(pulses);
+
 #endif
 
     reading_delta = 0;
@@ -372,7 +408,10 @@ void init_reading() {
 /****************************************************************************/
 
 DWORD reading;
+DWORD pulses;
+
 DWORD reading_delta;
+DWORD pulses_delta;
 
 DWORD get_reading() {
 
@@ -388,7 +427,21 @@ DWORD get_reading() {
     return reading;
 }
 
+DWORD get_pulses() {
+
+    if (!reading_valid)
+        init_reading();
+
+    if (pulses_delta) {
+        pulses += pulses_delta;
+	      pulses_delta = 0;
+    }
+
+    return pulses;
+}
+
 void inc_reading(DWORD value) {
+    pulses_delta += 1;
     reading_delta += value;
 }
 
@@ -397,9 +450,16 @@ void reset_reading() {
     reading_delta = 0;
 }
 
+void reset_pulses() {
+    pulses = 0;
+    pulses_delta = 0;
+}
+
 void init_reading() {
     reading = initial_meter_reading;
     reading_delta = 0;
+    pulses = 0;
+    pulses_delta = 0;
     reading_valid = true;
 }
 
@@ -452,6 +512,15 @@ ZUNO_SETUP_CHANNELS(
         METER_PRECISION_THREE_DECIMALS,    // 3 decimal places
         get_reading,                       // Reading 'get' function
         reset_reading                      // Reading 'reset' function
+    ),
+    ZUNO_METER(
+        ZUNO_METER_TYPE_GAS,               // Gas meter
+        METER_RESET_ENABLE,                // Provides meter reset function
+        ZUNO_METER_WATER_SCALE_PULSECOUNT, // Unit is pulse count
+        METER_SIZE_FOUR_BYTES,             // 4-bytes precision
+        METER_PRECISION_ZERO_DECIMALS,     // 0 decimal places
+        get_pulses,                        // Pulses 'get' function
+        reset_pulses                       // Pulses 'reset' function
     )
 );
 
@@ -625,6 +694,10 @@ void loop() {
     UART.print(" - reading = ");
     UART.print(get_reading());
 
+    // Pulses
+    UART.print(" - pulses = ");
+    UART.print(get_pulses());
+
     // Count of EM4 wake-ups, should also zero when device goes into EM4 state
     UART.print(" - em4_count = ");
     UART.print(em4_count);
@@ -656,6 +729,7 @@ void loop() {
     // slow EEPROM write to happen in an interrupt routine or Z-Wave
     // protocol function.
     get_reading();
+    get_pulses();
 
 #endif
 
@@ -667,6 +741,8 @@ void loop() {
             UART.println("Sending report");
 #endif
             zunoSendReport(1);
+            zunoSendReport(2);
+
         } else {
 #ifdef UART
             UART.println("Not reporting, not in network");
