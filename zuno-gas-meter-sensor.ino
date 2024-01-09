@@ -183,6 +183,9 @@ enum{
 // awake.
 //#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
+// Every so often, make sure the state is written to EEPROM
+#define STATE_UPDATE_PERIOD 15
+
 /****************************************************************************/
 /* Timing information
 /****************************************************************************/
@@ -193,6 +196,9 @@ uint32_t last_pulse_millis = 1 << 31;
 
 // Time of next report
 uint32_t next_report_millis = 0;
+
+// Time of next state update
+uint32_t next_state_update_millis = 0;
 
 // Work out time since first value, allowing for the time to overflow.
 // Milliseconds in 32-bits ~= 50 days overflow
@@ -222,9 +228,20 @@ bool after(DWORD then, DWORD when) {
 }
 
 // Set time of next report
+void next_state_update(DWORD secs) {
+
+    next_state_update_millis = millis() + 1000 * secs;
+
+#ifdef UART
+    UART.print("Next state update set to = ");
+    UART.println(next_state_update_millis);
+#endif
+
+}
+
 void next_report_seconds(DWORD secs) {
 
-    next_report_millis += 1000 * secs;
+    next_report_millis = millis() + 1000 * secs;
 
 #ifdef UART
     UART.print("Next report set to = ");
@@ -237,7 +254,14 @@ void set_wakeup_timer() {
 
     // Before leaving the loop, work out how much time is needed to
     // the next report, and set the wake-up timer.
-    DWORD secs = ((next_report_millis - millis()) / 1000) + 1;
+    DWORD now = millis();
+    DWORD report_secs = ((next_report_millis - now) / 1000) + 1;
+    DWORD state_update_secs = ((next_state_update_millis - now) / 1000) + 1;
+
+    // Pick whichever is sooner
+    DWORD secs = report_secs;
+    if (state_update_secs < report_secs) secs = state_update_secs;
+    if (secs < 1) secs = 1;
 
     // Set wake-up timer
     zunoSetCustomWUPTimer(secs);
@@ -340,7 +364,7 @@ DWORD get_pulses() {
 
     if (pulses_delta) {
         pulses += pulses_delta;
-	      pulses_delta = 0;
+        pulses_delta = 0;
         EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
     }
 
@@ -377,8 +401,8 @@ void init_reading() {
         UART.println("Resetting EEPROM values");
 #endif
 
-	      pulses = 0;
-	
+        pulses = 0;
+
         EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
         EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
         EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
@@ -434,7 +458,7 @@ DWORD get_pulses() {
 
     if (pulses_delta) {
         pulses += pulses_delta;
-	      pulses_delta = 0;
+        pulses_delta = 0;
     }
 
     return pulses;
@@ -488,7 +512,7 @@ ZUNO_SETUP_CONFIGPARAMETERS(
     ZUNO_CONFIG_PARAMETER_INFO(
         "Meter report period",
         "Specifies period in seconds between meter reports",
-        15, 3600, 60
+        1, 3600, 60
     ),
     ZUNO_CONFIG_PARAMETER_INFO(
         "Pulse debounce time",
@@ -678,11 +702,19 @@ void loop() {
     UART.print("uptime = ");
     UART.print(now);
 
-    // Milliseconds since boot
+    // Time to report
     UART.print(" - next-report = ");
     UART.print(next_report_millis);
 
     if (after(next_report_millis, now)) {
+        UART.print(" (!)");
+    }
+
+    // Time to update state
+    UART.print(" - next-state-update = ");
+    UART.print(next_state_update_millis);
+
+    if (after(next_state_update_millis, now)) {
         UART.print(" (!)");
     }
 
@@ -721,29 +753,48 @@ void loop() {
     else    
         UART.println();
 
-#else
-
-    // Behind the scenes, this reconciles the 'delta' value into the
-    // reading value and then writes to EEPROM as a side-effect.  This is
-    // a good place to do this because we don't want the reconciliation/
-    // slow EEPROM write to happen in an interrupt routine or Z-Wave
-    // protocol function.
-    get_reading();
-    get_pulses();
-
 #endif
 
+    // The loop has two main functions: update state to EEPROM, (keeps meter readings more accurate if there's a reset),
+    // and sending out Z-Wave unsolicited reports
+
+    // Update state if needed
+    if (after(next_state_update_millis, now)) {
+
+#ifdef UART
+        UART.println("State update");
+#endif
+
+        // Side effect is updating EEPROM
+        get_reading();
+        get_pulses();
+
+        next_state_update(STATE_UPDATE_PERIOD);
+
+    }
+
+    // Time to send out a report?
     if (after(next_report_millis, now)) {
 
-        // Send channel reports
+        // Send channel reports only if we're in a network
         if (zunoInNetwork()) {
 #ifdef UART
             UART.println("Sending report");
 #endif
+
+            // Behind the scenes, this reconciles the 'delta' value into the
+            // reading value and then writes to EEPROM as a side-effect.  This is
+            // a good place to do this because we don't want the reconciliation/
+            // slow EEPROM write to happen in an interrupt routine or Z-Wave
+            // protocol function.  Roughly a noop if delta is zero.
+            get_reading();
+            get_pulses();
+
             zunoSendReport(1);
             zunoSendReport(2);
 
         } else {
+
 #ifdef UART
             UART.println("Not reporting, not in network");
 #endif
@@ -753,6 +804,7 @@ void loop() {
 
     }
 
+    // Set the wakeup timer, will be earliest of state update and meter report time
     set_wakeup_timer();
 
     // Send device to EM4 sleep state when it is ready to sleep
@@ -761,7 +813,7 @@ void loop() {
     // Increment loop count
     loop_count++;
 
-    // Wait 1 second before leaving loop
+    // Wait before leaving loop, in case we go straight back into loop, don't need a busy wait
     delay(1000);
 
 }
