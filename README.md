@@ -19,11 +19,29 @@ You need:
 - A reed switch.  I used a "BQLZR cylindrical plastic mounted reed proximity
   switch", no doubt others will do.
 - Some way to power the Z-Uno, there are a lot of options, but to get
-  started you can use a USB power supply.
+  started you can use a USB power supply.  I found a power supply from
+  Treedix which supplies 3.3V from a 3.7V (18650) battery, should keep the
+  device going a good long while.
 
 The reed switch is connected between the ground pin (GND) and the pin
-called "Pin 18".  These are not standard pin numbers, so verify with the
+called "Pin 11".  These are not standard pin numbers, so verify with the
 pin-out.  https://z-uno.z-wave.me/technical/pinout/
+
+                     (-)                (+)
+                        ,--------------.
+                 ,------| power supply |------.
+                 |      `--------------'      |
+                 |                            |
+                 |      ,-------------.       |
+         +-------+------| Z-UNO gen 2 |-------'
+         |          GND `-------------' 3.3V
+         |                  11 |
+         |                     |
+         |                     |
+         |                     |
+         |   ,-------------.   |
+         `---| reed switch |---'
+             `-------------'
 
 ### Programming
 

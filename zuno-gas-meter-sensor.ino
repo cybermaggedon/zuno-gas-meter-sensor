@@ -25,11 +25,29 @@ You need:
 - A reed switch.  I used a "BQLZR cylindrical plastic mounted reed proximity
   switch", no doubt others will do.
 - Some way to power the Z-Uno, there are a lot of options, but to get
-  started you can use a USB power supply.
+  started you can use a USB power supply.  I found a power supply from
+  Treedix which supplies 3.3V from a 3.7V (18650) battery, should keep the
+  device going a good long while.
 
 The reed switch is connected between the ground pin (GND) and the pin
-called "Pin 18".  These are not standard pin numbers, so verify with the
+called "Pin 11".  These are not standard pin numbers, so verify with the
 pin-out.  https://z-uno.z-wave.me/technical/pinout/
+
+                     (-)                (+)
+                        ,--------------.
+                 ,------| power supply |------.
+                 |      `--------------'      |
+                 |                            |
+                 |      ,-------------.       |
+         +-------+------| Z-UNO gen 2 |-------'
+         |          GND `-------------' 3.3V
+         |                  11 |
+         |                     |
+         |                     |
+         |                     |
+         |   ,-------------.   |
+         `---| reed switch |---'
+             `-------------'
 
 Programming
 -----------
@@ -149,7 +167,7 @@ Licence
 /* Constants etc.
 /****************************************************************************/
 
-// Interrupt driven by an exteral pulse on pin 18.
+// Interrupt driven by an exteral pulse on pin 11.
 #define PULSE_PIN 11
 
 // Un-comment this to turn on debug output on serial board.
@@ -599,7 +617,7 @@ boolean woken_by_timer() {
         (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM2);
 }
 
-// Interrupt handler for button on pin 18, increments the interrupt count.
+// Interrupt handler for button on pin 11, increments the interrupt count.
 // No de-bounce on the button, so click can result in multiple increemnts
 void interrupt() {
 
@@ -687,11 +705,11 @@ void setup() {
     // Initialise the reading
     init_reading();
 
-    // Configure pin 18 for an interrupt
+    // Configure pin 11 for an interrupt
     zunoEM4EnablePinWakeup(PULSE_PIN);     // Not needed, according to ref,
-                                           // pin 18 is already set up as an
+                                           // pin 11 is already set up as an
                                            // EM4 wake
-    pinMode(PULSE_PIN, INPUT_PULLUP);      // Pin 18 pull-up mode
+    pinMode(PULSE_PIN, INPUT_PULLUP);      // Pin 11 pull-up mode
     attachInterrupt(PULSE_PIN, interrupt, FALLING); // Falling interrupt
     
     // Wake up in a few seeconds and provide an initial report
