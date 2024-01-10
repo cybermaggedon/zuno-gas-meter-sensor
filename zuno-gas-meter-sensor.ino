@@ -150,10 +150,11 @@ Licence
 /****************************************************************************/
 
 // Interrupt driven by an exteral pulse on pin 18.
-#define PULSE_PIN 18
+#define PULSE_PIN 11
 
 // Un-comment this to turn on debug output on serial board.
 //#define UART Serial
+//#define RESET_UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep
 // mode?
@@ -622,6 +623,7 @@ void interrupt() {
 /****************************************************************************/
 
 void wake_handler(){
+
 #ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
     UART.println("*** WAKE!");
@@ -643,6 +645,16 @@ void sleep_handler(){
 // Core calls this on reset
 void setup() {
 
+#ifdef RESET_UART
+    RESET_UART.begin(115200);
+    RESET_UART.println("RESET");
+    RESET_UART.println(wake_reason());
+    byte wakeUpReason = zunoGetWakeReason();
+    if (wakeUpReason == ZUNO_WAKEUP_REASON_WATCH_DOG) {
+      RESET_UART.println("- WATCHDOG");
+    }
+#endif
+
     initial_meter_reading = zunoLoadCFGParam(INITIAL_METER_READING);
     meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
     debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
@@ -653,8 +665,10 @@ void setup() {
     UART.begin(115200);
     UART.println();
 
+    UART.println();
     UART.println("Gas meter pulse sensor");
     UART.println("======================");
+    UART.println();
 
     // Set UART to output debug data
     UART.print("setup: called, ");
