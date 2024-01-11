@@ -357,6 +357,7 @@ ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
 
 DWORD reading;
 DWORD pulses;
+bool changed;
 
 DWORD reading_delta;
 DWORD pulses_delta;
@@ -390,9 +391,19 @@ DWORD get_pulses() {
     return pulses;
 }
 
+void persist() {
+      if (changed) {
+        EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+        changed = false;
+    }
+
+}
+
 void inc_reading(DWORD value) {
     pulses_delta += 1;
     reading_delta += value;
+    if (reading > 99999999) reading -= 100000000; // Number overflows like a gas meter does
+    changed = true;
 }
 
 void reset_reading() {
