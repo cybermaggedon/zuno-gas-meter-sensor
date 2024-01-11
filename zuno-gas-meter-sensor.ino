@@ -171,7 +171,7 @@ Licence
 #define PULSE_PIN 11
 
 // Un-comment this to turn on debug output on serial board.
-//#define UART Serial
+#define UART Serial
 //#define RESET_UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep
@@ -203,7 +203,7 @@ enum{
 //#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
 // Every so often, make sure the state is written to EEPROM
-#define STATE_UPDATE_PERIOD 15
+#define STATE_UPDATE_PERIOD 60
 
 /****************************************************************************/
 /* Timing information
@@ -251,10 +251,10 @@ void next_state_update(DWORD secs) {
 
     next_state_update_millis = millis() + 1000 * secs;
 
-#ifdef UART
-    UART.print("Next state update set to = ");
-    UART.println(next_state_update_millis);
-#endif
+//#ifdef UART
+//    UART.print("Next state update set to = ");
+//    UART.println(next_state_update_millis);
+//#endif
 
 }
 
@@ -262,10 +262,10 @@ void next_report_seconds(DWORD secs) {
 
     next_report_millis = millis() + 1000 * secs;
 
-#ifdef UART
-    UART.print("Next report set to = ");
-    UART.println(next_report_millis);
-#endif
+//#ifdef UART
+//    UART.print("Next report set to = ");
+//    UART.println(next_report_millis);
+//#endif
 
 }
 
@@ -285,10 +285,10 @@ void set_wakeup_timer() {
     // Set wake-up timer
     zunoSetCustomWUPTimer(secs);
 
-#ifdef UART
-    UART.print("Set custom wake-up for = ");
-    UART.println(secs);
-#endif
+//#ifdef UART
+//    UART.print("Set custom wake-up for = ");
+//    UART.println(secs);
+//#endif
 
 }
 
@@ -300,13 +300,13 @@ DWORD initial_meter_reading;
 DWORD meter_report_period;
 DWORD debounce_time;
 DWORD pulse_increment;
-boolean reading_valid = false;
+boolean values_valid = false;
 
 void config_parameter_changed(uint8_t param, uint32_t value) {
 
     if (param == INITIAL_METER_READING) {
         initial_meter_reading = value;
-        reading_valid = false;         // This triggers a reset of the meter
+        values_valid = false;         // This triggers a reset of the meter
 
         // Report new value in 2 seconds
         next_report_millis = millis() + 5000;
@@ -359,34 +359,18 @@ DWORD reading;
 DWORD pulses;
 bool changed;
 
-DWORD reading_delta;
-DWORD pulses_delta;
-
 DWORD get_reading() {
 
-    if (!reading_valid)
+    if (!values_valid)
         init_reading();
-
-    if (reading_delta) {
-        reading += reading_delta;
-        reading_delta = 0;
-        if (reading > 99999999) reading -= 100000000; // Number overflows like a gas meter does
-        EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
-    }
 
     return reading;
 }
 
 DWORD get_pulses() {
 
-    if (!reading_valid)
+    if (!values_valid)
         init_reading();
-
-    if (pulses_delta) {
-        pulses += pulses_delta;
-        pulses_delta = 0;
-        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
-    }
 
     return pulses;
 }
@@ -394,28 +378,27 @@ DWORD get_pulses() {
 void persist() {
       if (changed) {
         EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
         changed = false;
     }
 
 }
 
-void inc_reading(DWORD value) {
-    pulses_delta += 1;
-    reading_delta += value;
+void inc_reading() {
+    pulses += 1;
+    reading += pulse_increment;
     if (reading > 99999999) reading -= 100000000; // Number overflows like a gas meter does
     changed = true;
 }
 
 void reset_reading() {
     reading = 0;
-    reading_delta = 0;
-    EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+    changed = true;
 }
 
 void reset_pulses() {
     pulses = 0;
-    pulses_delta = 0;
-    EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+    changed = true;
 }
 
 void init_reading() {
@@ -450,8 +433,8 @@ void init_reading() {
 
 #endif
 
-    reading_delta = 0;
-    reading_valid = true;
+    values_valid = true;
+    changed = false;
 
 }
 
@@ -469,7 +452,7 @@ DWORD pulses_delta;
 
 DWORD get_reading() {
 
-    if (!reading_valid)
+    if (!values_valid)
         init_reading();
 
     if (reading_delta) {
@@ -483,7 +466,7 @@ DWORD get_reading() {
 
 DWORD get_pulses() {
 
-    if (!reading_valid)
+    if (!values_valid)
         init_reading();
 
     if (pulses_delta) {
@@ -494,9 +477,9 @@ DWORD get_pulses() {
     return pulses;
 }
 
-void inc_reading(DWORD value) {
+void inc_reading() {
     pulses_delta += 1;
-    reading_delta += value;
+    reading_delta += pulse_increment;
 }
 
 void reset_reading() {
@@ -514,7 +497,7 @@ void init_reading() {
     reading_delta = 0;
     pulses = 0;
     pulses_delta = 0;
-    reading_valid = true;
+    values_valid = true;
 }
 
 #endif
@@ -643,7 +626,7 @@ void interrupt() {
 
     // Increase the reading.  This increases a delta value, don't want any
     // slow EEPROM type stuff happening in this interrupt function.
-    inc_reading(pulse_increment);
+    inc_reading();
 
 }
 
@@ -792,7 +775,7 @@ void loop() {
 
     // Outputs sleep_locked if sleep locked
     if (zunoIsSleepLocked())
-        UART.println(" - sleep_locked");
+        UART.println(" - sleep-locked");
     else    
         UART.println();
 
@@ -808,9 +791,8 @@ void loop() {
         UART.println("State update");
 #endif
 
-        // Side effect is updating EEPROM
-        get_reading();
-        get_pulses();
+        // Updating EEPROM
+        persist();
 
         next_state_update(STATE_UPDATE_PERIOD);
 
@@ -824,14 +806,6 @@ void loop() {
 #ifdef UART
             UART.println("Sending report");
 #endif
-
-            // Behind the scenes, this reconciles the 'delta' value into the
-            // reading value and then writes to EEPROM as a side-effect.  This is
-            // a good place to do this because we don't want the reconciliation/
-            // slow EEPROM write to happen in an interrupt routine or Z-Wave
-            // protocol function.  Roughly a noop if delta is zero.
-            get_reading();
-            get_pulses();
 
             zunoSendReport(1);
             zunoSendReport(2);
@@ -857,7 +831,7 @@ void loop() {
     loop_count++;
 
     // Wait before leaving loop, in case we go straight back into loop, don't need a busy wait
-    delay(1000);
+    delay(500);
 
 }
 
