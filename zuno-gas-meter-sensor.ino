@@ -132,13 +132,15 @@ No warranty.
 The low-power mode (EM4) does not appear to work with this code, the reason
 for that is not known.
 
-There are periodic resets for an unknown cause.  I suspect this is a
-watch-dog event and is linked to EEPROM writes.  The loop() code contains
-a get_reading() call to get the reading updated and EEPROM value written
-out.  I suspect a timing condition, possibly occasionally the get_reading()
-invocation from the Z-Wave core can occur after an interrupt but before
-the loop() code has reconciled the new meter pulse.  In practice this means
-a reset at a safe time, and likely no information is lost.
+The Z-Uno reference says that the device automatically sends and receives
+wake-up requests to the controller.  In practice I have found this not to be
+the case, so have implemented a slightly 'hacky' invocation of wake-ups.
+The code examines a place in the EEPROM where the Z-Uno core is known to
+store its the wakeup interval parameter and then uses that to decide
+when wake-ups are sent.  If you change the wakeup configuration interval using
+your Z-Wave controller software, after that value has been received by the
+device you need to hit the reset button on the Z-Uno to have it restart
+and load the new value from EEPROM.
 
 Licence
 =======
@@ -171,7 +173,7 @@ Licence
 #define PULSE_PIN 11
 
 // Un-comment this to turn on debug output on serial board.
-#define UART Serial
+//#define UART Serial
 //#define RESET_UART Serial
 
 // Trying to use EM4 sleep mode, not sure if it works or maybe in EM2 sleep
@@ -218,6 +220,9 @@ uint32_t next_report_millis = 0;
 
 // Time of next state update
 uint32_t next_state_update_millis = 0;
+
+// Time of next wakeup send
+uint32_t next_send_wakeup_millis = 0;
 
 // Work out time since first value, allowing for the time to overflow.
 // Milliseconds in 32-bits ~= 50 days overflow
@@ -269,17 +274,31 @@ void next_report_seconds(DWORD secs) {
 
 }
 
+void next_send_wakeup_seconds(DWORD secs) {
+
+    next_send_wakeup_millis = millis() + 1000 * secs;
+
+//#ifdef UART
+//    UART.print("Next report set to = ");
+//    UART.println(next_send_wakeup_millis);
+//#endif
+
+}
+
 void set_wakeup_timer() {
 
     // Before leaving the loop, work out how much time is needed to
     // the next report, and set the wake-up timer.
     DWORD now = millis();
-    DWORD report_secs = ((next_report_millis - now) / 1000) + 1;
-    DWORD state_update_secs = ((next_state_update_millis - now) / 1000) + 1;
+    DWORD report_secs = ((next_report_millis - now) / 1000);
+    DWORD state_update_secs = ((next_state_update_millis - now) / 1000);
+    DWORD send_wakeup_secs = ((next_send_wakeup_millis - now) / 1000);
 
     // Pick whichever is sooner
     DWORD secs = report_secs;
-    if (state_update_secs < report_secs) secs = state_update_secs;
+    if (state_update_secs < secs) secs = state_update_secs;
+    if (send_wakeup_secs < secs) secs = send_wakeup_secs;
+
     if (secs < 1) secs = 1;
 
     // Set wake-up timer
@@ -301,6 +320,10 @@ DWORD meter_report_period;
 DWORD debounce_time;
 DWORD pulse_increment;
 boolean values_valid = false;
+
+// Hacky, we're implementing wakeup timing.  It's supposed to be implemented
+// in the Z-Uno core.
+DWORD wakeup_period;
 
 void config_parameter_changed(uint8_t param, uint32_t value) {
 
@@ -350,10 +373,8 @@ void config_parameter_changed(uint8_t param, uint32_t value) {
 ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
 
 /****************************************************************************/
-/* State implementation: EEPROM version
+/* State implementation
 /****************************************************************************/
-
-#ifdef USE_EEPROM
 
 DWORD reading;
 DWORD pulses;
@@ -375,15 +396,6 @@ DWORD get_pulses() {
     return pulses;
 }
 
-void persist() {
-      if (changed) {
-        EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
-        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
-        changed = false;
-    }
-
-}
-
 void inc_reading() {
     pulses += 1;
     reading += pulse_increment;
@@ -399,6 +411,17 @@ void reset_reading() {
 void reset_pulses() {
     pulses = 0;
     changed = true;
+}
+
+#ifdef USE_EEPROM
+
+void persist() {
+      if (changed) {
+        EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+        EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+        changed = false;
+    }
+
 }
 
 void init_reading() {
@@ -440,63 +463,14 @@ void init_reading() {
 
 #else
 
-/****************************************************************************/
-/* State implementation: In-memory, doesn't use EEPROM
-/****************************************************************************/
+void persist() {
 
-DWORD reading;
-DWORD pulses;
-
-DWORD reading_delta;
-DWORD pulses_delta;
-
-DWORD get_reading() {
-
-    if (!values_valid)
-        init_reading();
-
-    if (reading_delta) {
-        reading += reading_delta;
-        reading_delta = 0;
-        if (reading > 99999999) reading -= 99999999; // Number overflows like a gas meter does
-    }
-
-    return reading;
-}
-
-DWORD get_pulses() {
-
-    if (!values_valid)
-        init_reading();
-
-    if (pulses_delta) {
-        pulses += pulses_delta;
-        pulses_delta = 0;
-    }
-
-    return pulses;
-}
-
-void inc_reading() {
-    pulses_delta += 1;
-    reading_delta += pulse_increment;
-}
-
-void reset_reading() {
-    reading = 0;
-    reading_delta = 0;
-}
-
-void reset_pulses() {
-    pulses = 0;
-    pulses_delta = 0;
 }
 
 void init_reading() {
     reading = initial_meter_reading;
-    reading_delta = 0;
     pulses = 0;
-    pulses_delta = 0;
+    changed = true;
     values_valid = true;
 }
 
@@ -654,6 +628,36 @@ void sleep_handler(){
     zunoEM4EnablePinWakeup(PULSE_PIN);
 }
 
+#ifdef DEBUG_SYS_EVENT
+
+String event_type(uint8_t event) {
+    switch (event) {
+    case ZUNO_SYS_EVENT_QUICKWAKEUP: return "quick-wakeup";
+ //   case ZUNO_SYS_EVENT_LEARNCOMPLETED: return "learn-completed";
+    case ZUNO_SYS_EVENT_LEARNSTARTED: return "learn-started";
+    case ZUNO_SYS_EVENT_SETDEFAULT: return "set-default";
+    case ZUNO_SYS_EVENT_SLEEP_MODEEXC: return "sleep-modexec";
+    case ZUNO_SYS_EVENT_STACK_OVERFLOW: return "stack-overflow";
+    case ZUNO_SYS_EVENT_QUEUE_OVERLOAD: return "queue-overload";
+    case ZUNO_SYS_EVENT_INVALID_TX_REQUEST: return "invalid-tx-request";
+    case ZUNO_SYS_EVENT_INVALID_COMMAND: return "invalid-command";
+    case ZUNO_SYS_EVENT_INVALID_CLOCK: return "invalid-clock";
+    case ZUNO_SYS_EVENT_INVALID_MEMORYAREA_IN_SYSCALL: return "invalid-memory-area";
+    case ZUNO_SYS_EVENT_INVALID_PARAMNUM_IN_SYSCALL: return "invalid-param-num";
+    case ZUNO_SYS_EVENT_INVALID_SYSCALL_PARAM_VALUE: return "invalid-syscall";
+    default: return "not-defined";
+    }
+}
+
+void sys_event(ZUNOSysEvent_t * e) {
+#ifdef UART
+  UART.print("-- sys-event ");
+  UART.println(event_type(e->event)); 
+#endif
+}
+
+#endif
+
 // Core calls this on reset
 void setup() {
 
@@ -671,6 +675,10 @@ void setup() {
     meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
     debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
     pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
+
+    // Fetch the last set wake-up period time.  This is hacky, not part of the official API.
+    EEPROM.get(EEPROM_WAKEUP_ADDR, &wakeup_period, sizeof(wakeup_period));
+    wakeup_period &= ((1<<20) - 1);
 
     // Debug stuff if debug is enabled
 #ifdef UART
@@ -694,6 +702,9 @@ void setup() {
     UART.println(debounce_time);
     UART.print("Pulse increment = ");
     UART.println(pulse_increment);
+    UART.print("Wake-up period = ");
+    UART.println(wakeup_period);
+
 #endif
 
     // Initialise the reading
@@ -713,6 +724,11 @@ void setup() {
     // Calls to wake/sleep handlers
     zunoAttachSysHandler(ZUNO_HANDLER_SLEEP, 0, (void*) &sleep_handler);
     zunoAttachSysHandler(ZUNO_HANDLER_WUP, 0, (void*) &wake_handler);
+
+
+#ifdef DEBUG_SYS_EVENT
+    ZUNO_SETUP_SYSEVENT_HANDLER(sys_event);
+#endif
 
 }
 
@@ -795,43 +811,54 @@ void loop() {
         persist();
 
         next_state_update(STATE_UPDATE_PERIOD);
+        zunoLockSleep();
 
+    }
+
+    // Time to send out a wakeup?
+    if (after(next_send_wakeup_millis, now)) {
+        // Send channel reports only if we're in a network
+        if (zunoInNetwork()) {
+#ifdef UART
+            UART.println("Sending wake-up");
+#endif
+            zunoSendWakeUpNotification();
+        } else {
+#ifdef UART
+            UART.println("No wake-up, not in network");
+#endif
+        }
+        next_send_wakeup_seconds(wakeup_period);
     }
 
     // Time to send out a report?
     if (after(next_report_millis, now)) {
-
         // Send channel reports only if we're in a network
         if (zunoInNetwork()) {
 #ifdef UART
             UART.println("Sending report");
 #endif
-
             zunoSendReport(1);
             zunoSendReport(2);
-
         } else {
-
 #ifdef UART
             UART.println("Not reporting, not in network");
 #endif
         }
-
         next_report_seconds(meter_report_period);
-
     }
-
-    // Set the wakeup timer, will be earliest of state update and meter report time
-    set_wakeup_timer();
-
-    // Send device to EM4 sleep state when it is ready to sleep
-    zunoSendDeviceToSleep(SLEEP_MODE);
 
     // Increment loop count
     loop_count++;
 
     // Wait before leaving loop, in case we go straight back into loop, don't need a busy wait
-    delay(500);
+    delay(1000);
+
+    // Send device to EM4 sleep state when it is ready to sleep
+    zunoSendDeviceToSleep(SLEEP_MODE);
+
+    // Set the wakeup timer, will be earliest of state update and meter report time
+    set_wakeup_timer();
 
 }
 

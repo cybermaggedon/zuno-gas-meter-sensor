@@ -116,13 +116,15 @@ No warranty.
 The low-power mode (EM4) does not appear to work with this code, the reason
 for that is not known.
 
-There are periodic resets for an unknown cause.  I suspect this is a
-watch-dog event and is linked to EEPROM writes.  The loop() code contains
-a get_reading() call to get the reading updated and EEPROM value written
-out.  I suspect a timing condition, possibly occasionally the get_reading()
-invocation from the Z-Wave core can occur after an interrupt but before
-the loop() code has reconciled the new meter pulse.  In practice this means
-a reset at a safe time, and likely no information is lost.
+The Z-Uno reference says that the device automatically sends and receives
+wake-up requests to the controller.  In practice I have found this not to be
+the case, so have implemented a slightly 'hacky' invocation of wake-ups.
+The code examines a place in the EEPROM where the Z-Uno core is known to
+store its the wakeup interval parameter and then uses that to decide
+when wake-ups are sent.  If you change the wakeup configuration interval using
+your Z-Wave controller software, after that value has been received by the
+device you need to hit the reset button on the Z-Uno to have it restart
+and load the new value from EEPROM.
 
 ## Licence
 
