@@ -184,23 +184,23 @@ Licence
 #define READING_ADDRESS (0x0)      // The last reading is stored here
 #define PULSE_COUNT_ADDRESS (0x4)  // Pulse count stored here
 #define INIT_COPY_ADDRESS (0x8)    // This is a copy of the initial reading \
-                                   // to help determine whether to \
+                                   // to help determine whether to	\
                                    // re-apply the setting.
 
 // Configuration value IDs
 enum {
-  INITIAL_METER_READING = 64,  // Initial reading value only used at install
-  METER_REPORT_PERIOD,         // Period (s) to send meter reports
-  DEBOUNCE_TIME,               // Period in which to ignore multiple pulses
-  PULSE_INCREMENT              // Amount to increase the reading for each
-                               // pulse.
+    INITIAL_METER_READING = 64,  // Initial reading value only used at install
+    METER_REPORT_PERIOD,         // Period (s) to send meter reports
+    DEBOUNCE_TIME,               // Period in which to ignore multiple pulses
+    PULSE_INCREMENT              // Amount to increase the reading for each
+    // pulse.
 };
 
 // This allows EEPROM storage to be turned off during development.  I do
 // this because EEPROM writes aren't an infinite resource.
 #define USE_EEPROM 1
 
-// When enabled, outputs sleep/wake messages and turns on the LED when
+// W hen enabled, outputs sleep/wake messages and turns on the LED when
 // awake.
 //#define SLEEP_WAKE_DEBUG_HANDLERS 1
 
@@ -229,111 +229,116 @@ uint32_t next_send_wakeup_millis = 0;
 // This overflows on 31 bits.
 uint32_t since(DWORD then, DWORD now) {
 
-  uint32_t diff = now - then;
+    uint32_t diff = now - then;
 
-  // Deal with integer overflow (32-bit values)
-  if (diff > 2147483648) diff -= 2147483648;
+    // Deal with integer overflow (32-bit values)
+    if (diff > 2147483648) diff -= 2147483648;
 
-  return diff;
+    return diff;
 }
 
 // Work out if when is after then, allowing for the time to overflow.
 // Milliseconds in 32-bits ~= 50 days overflow
 bool after(DWORD then, DWORD when) {
 
-  uint32_t diff = when - then;
+    uint32_t diff = when - then;
 
-  // Deal with integer overflow (32-bit values)
-  if (diff > 2147483648) return false;
+    // Deal with integer overflow (32-bit values)
+    if (diff > 2147483648) return false;
 
-  return true;
+    return true;
 }
 
 // Set time of next report
 void next_state_update(DWORD secs) {
 
-  next_state_update_millis = millis() + 1000 * secs;
+    next_state_update_millis = millis() + 1000 * secs;
 
-  //#ifdef UART
-  //    UART.print("Next state update set to = ");
-  //    UART.println(next_state_update_millis);
-  //#endif
+//#ifdef UART
+//    UART.print("Next state update set to = ");
+//    UART.println(next_state_update_millis);
+//#endif
 }
 
 void next_report_seconds(DWORD secs) {
 
-  next_report_millis = millis() + 1000 * secs;
+    next_report_millis = millis() + 1000 * secs;
 
-  //#ifdef UART
-  //    UART.print("Next report set to = ");
-  //    UART.println(next_report_millis);
-  //#endif
+//#ifdef UART
+//    UART.print("Next report set to = ");
+//    UART.println(next_report_millis);
+//#endif
 }
 
 void next_send_wakeup_seconds(DWORD secs) {
 
-  next_send_wakeup_millis = millis() + 1000 * secs;
+    next_send_wakeup_millis = millis() + 1000 * secs;
 
-  //#ifdef UART
-  //    UART.print("Next report set to = ");
-  //    UART.println(next_send_wakeup_millis);
-  //#endif
+//#ifdef UART
+//    UART.print("Next report set to = ");
+//    UART.println(next_send_wakeup_millis);
+//#endif
 }
 
 void set_wakeup_timer() {
 
-  // Before leaving the loop, work out how much time is needed to
-  // the next report, and set the wake-up timer.
-  DWORD now = millis();
-  unsigned long int report_secs = ((next_report_millis - now) / 1000);
-  unsigned long int state_update_secs = ((next_state_update_millis - now) / 1000);
-  unsigned long int send_wakeup_secs = ((next_send_wakeup_millis - now) / 1000);
+    // Before leaving the loop, work out how much time is needed to
+    // the next report, and set the wake-up timer.
+    DWORD now = millis();
+
+    unsigned long int report_secs = ((next_report_millis - now) / 1000);
+
+    unsigned long int state_update_secs =
+	((next_state_update_millis - now) / 1000);
+
+    unsigned long int send_wakeup_secs =
+	((next_send_wakeup_millis - now) / 1000);
  
-  if (report_secs < 0) report_secs = 0;
-  if (state_update_secs < 0) state_update_secs = 0;
-  if (send_wakeup_secs < 0) send_wakeup_secs = 0;
+    if (report_secs < 0) report_secs = 0;
+    if (state_update_secs < 0) state_update_secs = 0;
+    if (send_wakeup_secs < 0) send_wakeup_secs = 0;
 
-  // Pick whichever is sooner
-  enum {
-    WAKE_EVENT = 0, REPORT_EVENT = 1, STATE_UPDATE = 2
-  } reason;
+    // Pick whichever is sooner
+    enum {
+	WAKE_EVENT = 0, REPORT_EVENT = 1, STATE_UPDATE = 2
+    } reason;
 
-  DWORD secs;
+    DWORD secs;
 
-  if (report_secs < state_update_secs) {
-    if (report_secs < send_wakeup_secs) {
-      reason = REPORT_EVENT;
-      secs = report_secs;
+    if (report_secs < state_update_secs) {
+	if (report_secs < send_wakeup_secs) {
+	    reason = REPORT_EVENT;
+	    secs = report_secs;
+	} else {
+	    reason = WAKE_EVENT;
+	    secs = send_wakeup_secs;
+	}
     } else {
-      reason = WAKE_EVENT;
-      secs = send_wakeup_secs;
+	if (state_update_secs < send_wakeup_secs) {
+	    reason = STATE_UPDATE;
+	    secs = state_update_secs;
+	} else {
+	    reason = WAKE_EVENT;
+	    secs = send_wakeup_secs;
+	}
     }
-  } else {
-    if (state_update_secs < send_wakeup_secs) {
-      reason = STATE_UPDATE;
-      secs = state_update_secs;
-    } else {
-      reason = WAKE_EVENT;
-      secs = send_wakeup_secs;
-    }
-  }
 
-  if (secs < 1) secs = 1;
-  secs += 1;
+    if (secs < 1) secs = 1;
+    secs += 1;
 
-  // Set wake-up timer
-  zunoSetCustomWUPTimer(secs);
+    // Set wake-up timer
+    zunoSetCustomWUPTimer(secs);
 
 #ifdef UART
-  UART.print("Set custom wake-up for = ");
-  UART.print(secs);
-  UART.print(" - reason ");
-  if (reason == REPORT_EVENT)
-     UART.println("REPORT");
-  else if (reason == STATE_UPDATE)
-     UART.println("STATE");
-  else
-     UART.println("WAKE");
+    UART.print("Set custom wake-up for = ");
+    UART.print(secs);
+    UART.print(" - reason ");
+    if (reason == REPORT_EVENT)
+	UART.println("REPORT");
+    else if (reason == STATE_UPDATE)
+	UART.println("STATE");
+    else
+	UART.println("WAKE");
 #endif
 }
 
@@ -353,46 +358,46 @@ DWORD wakeup_period;
 
 void config_parameter_changed(uint8_t param, uint32_t value) {
 
-  if (param == INITIAL_METER_READING) {
-    initial_meter_reading = value;
-    values_valid = false;  // This triggers a reset of the meter
+    if (param == INITIAL_METER_READING) {
+	initial_meter_reading = value;
+	values_valid = false;  // This triggers a reset of the meter
 
-    // Report new value in 2 seconds
-    next_report_millis = millis() + 5000;
-    set_wakeup_timer();
-
-#ifdef UART
-    UART.print("Initial reading config = ");
-    UART.println(initial_meter_reading);
-#endif
-  }
-
-  if (param == METER_REPORT_PERIOD) {
-    meter_report_period = value;
-    next_report_millis = millis() + 1000 * value;
-    set_wakeup_timer();
+	// Report new value in 2 seconds
+	next_report_millis = millis() + 5000;
+	set_wakeup_timer();
 
 #ifdef UART
-    UART.print("Meter report period = ");
-    UART.println(meter_report_period);
+	UART.print("Initial reading config = ");
+	UART.println(initial_meter_reading);
 #endif
-  }
+    }
 
-  if (param == DEBOUNCE_TIME) {
-    debounce_time = value;
-#ifdef UART
-    UART.print("Pulse debounce time = ");
-    UART.println(debounce_time);
-#endif
-  }
+    if (param == METER_REPORT_PERIOD) {
+	meter_report_period = value;
+	next_report_millis = millis() + 1000 * value;
+	set_wakeup_timer();
 
-  if (param == PULSE_INCREMENT) {
-    pulse_increment = value;
 #ifdef UART
-    UART.print("Pulse increment = ");
-    UART.println(pulse_increment);
+	UART.print("Meter report period = ");
+	UART.println(meter_report_period);
 #endif
-  }
+    }
+
+    if (param == DEBOUNCE_TIME) {
+	debounce_time = value;
+#ifdef UART
+	UART.print("Pulse debounce time = ");
+	UART.println(debounce_time);
+#endif
+    }
+
+    if (param == PULSE_INCREMENT) {
+	pulse_increment = value;
+#ifdef UART
+	UART.print("Pulse increment = ");
+	UART.println(pulse_increment);
+#endif
+    }
 }
 
 ZUNO_SETUP_CFGPARAMETER_HANDLER(config_parameter_changed);
@@ -407,80 +412,80 @@ bool changed;
 
 DWORD get_reading() {
 
-  if (!values_valid)
-    init_reading();
+    if (!values_valid)
+	init_reading();
 
-  return reading;
+    return reading;
 }
 
 DWORD get_pulses() {
 
-  if (!values_valid)
-    init_reading();
+    if (!values_valid)
+	init_reading();
 
-  return pulses;
+    return pulses;
 }
 
 void inc_reading() {
-  pulses += 1;
-  reading += pulse_increment;
-  if (reading > 99999999) reading -= 100000000;  // Number overflows like a gas meter does
-  changed = true;
+    pulses += 1;
+    reading += pulse_increment;
+    if (reading > 99999999) reading -= 100000000;  // Number overflows like a gas meter does
+    changed = true;
 }
 
 void reset_reading() {
-  reading = 0;
-  changed = true;
+    reading = 0;
+    changed = true;
 }
 
 void reset_pulses() {
-  pulses = 0;
-  changed = true;
+    pulses = 0;
+    changed = true;
 }
 
 #ifdef USE_EEPROM
 
 void persist() {
-  if (changed) {
-    EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
-    EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
-    changed = false;
-  }
+    if (changed) {
+	EEPROM.put(READING_ADDRESS, &reading, sizeof(reading));
+	EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+	changed = false;
+    }
 }
 
 void init_reading() {
 
-  DWORD init_value;
-  DWORD init_copy;
+    DWORD init_value;
+    DWORD init_copy;
 
-  init_value = initial_meter_reading;
-  EEPROM.get(INIT_COPY_ADDRESS, &init_copy, sizeof(init_copy));
+    init_value = initial_meter_reading;
+    EEPROM.get(INIT_COPY_ADDRESS, &init_copy, sizeof(init_copy));
 
-  if (init_value != init_copy) {
+    if (init_value != init_copy) {
 #ifdef UART
-    UART.println("Resetting EEPROM values");
+	UART.println("Resetting EEPROM values");
 #endif
 
-    pulses = 0;
+	pulses = 0;
 
-    EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
-    EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
-    EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
-  }
+	EEPROM.put(READING_ADDRESS, &init_value, sizeof(init_value));
+	EEPROM.put(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+	EEPROM.put(INIT_COPY_ADDRESS, &init_value, sizeof(init_value));
+    }
 
-  EEPROM.get(READING_ADDRESS, &reading, sizeof(reading));
-  EEPROM.get(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
+    EEPROM.get(READING_ADDRESS, &reading, sizeof(reading));
+    EEPROM.get(PULSE_COUNT_ADDRESS, &pulses, sizeof(pulses));
 
 #ifdef UART
-  UART.print("Loading previous reading = ");
-  UART.println(reading);
-  UART.print("Loading previous pulses = ");
-  UART.println(pulses);
+    UART.print("Loading previous reading = ");
+    UART.println(reading);
+    UART.print("Loading previous pulses = ");
+    UART.println(pulses);
 
 #endif
 
-  values_valid = true;
-  changed = false;
+    values_valid = true;
+    changed = false;
 }
 
 #else
@@ -489,10 +494,10 @@ void persist() {
 }
 
 void init_reading() {
-  reading = initial_meter_reading;
-  pulses = 0;
-  changed = true;
-  values_valid = true;
+    reading = initial_meter_reading;
+    pulses = 0;
+    changed = true;
+    values_valid = true;
 }
 
 #endif
@@ -512,43 +517,43 @@ ZUNO_SETUP_SLEEPING_MODE(ZUNO_SLEEPING_MODE_SLEEPING);
 
 // Configuration parameter definitions
 ZUNO_SETUP_CONFIGPARAMETERS(
-  ZUNO_CONFIG_PARAMETER_INFO(
-    "Initial meter reading",
-    "Specifies initial meter reading at time of install",
-    0, 99999999, 0),
-  ZUNO_CONFIG_PARAMETER_INFO(
-    "Meter report period",
-    "Specifies period in seconds between meter reports",
-    1, 3600, 60),
-  ZUNO_CONFIG_PARAMETER_INFO(
-    "Pulse debounce time",
-    "Specifies period in milliseconds for ignored pulses",
-    0, 30000, 5000),
-  ZUNO_CONFIG_PARAMETER_INFO(
-    "Reading increment per pulse",
-    "Specifies the reading incremement to apply per pulse",
-    1, 1000000, 1));
+    ZUNO_CONFIG_PARAMETER_INFO(
+	"Initial meter reading",
+	"Specifies initial meter reading at time of install",
+	0, 99999999, 0),
+    ZUNO_CONFIG_PARAMETER_INFO(
+	"Meter report period",
+	"Specifies period in seconds between meter reports",
+	1, 3600, 60),
+    ZUNO_CONFIG_PARAMETER_INFO(
+	"Pulse debounce time",
+	"Specifies period in milliseconds for ignored pulses",
+	0, 30000, 5000),
+    ZUNO_CONFIG_PARAMETER_INFO(
+	"Reading increment per pulse",
+	"Specifies the reading incremement to apply per pulse",
+	1, 1000000, 1));
 
 // Channels
 ZUNO_SETUP_CHANNELS(
-  ZUNO_METER(
-    ZUNO_METER_TYPE_GAS,             // Gas meter
-    METER_RESET_ENABLE,              // Provides meter reset function
-    ZUNO_METER_WATER_SCALE_METERS3,  // Unit is cubic-meters
-    METER_SIZE_FOUR_BYTES,           // 4-bytes precision
-    METER_PRECISION_THREE_DECIMALS,  // 3 decimal places
-    get_reading,                     // Reading 'get' function
-    reset_reading                    // Reading 'reset' function
-    ),
-  ZUNO_METER(
-    ZUNO_METER_TYPE_GAS,                // Gas meter
-    METER_RESET_ENABLE,                 // Provides meter reset function
-    ZUNO_METER_WATER_SCALE_PULSECOUNT,  // Unit is pulse count
-    METER_SIZE_FOUR_BYTES,              // 4-bytes precision
-    METER_PRECISION_ZERO_DECIMALS,      // 0 decimal places
-    get_pulses,                         // Pulses 'get' function
-    reset_pulses                        // Pulses 'reset' function
-    ));
+    ZUNO_METER(
+	ZUNO_METER_TYPE_GAS,             // Gas meter
+	METER_RESET_ENABLE,              // Provides meter reset function
+	ZUNO_METER_WATER_SCALE_METERS3,  // Unit is cubic-meters
+	METER_SIZE_FOUR_BYTES,           // 4-bytes precision
+	METER_PRECISION_THREE_DECIMALS,  // 3 decimal places
+	get_reading,                     // Reading 'get' function
+	reset_reading                    // Reading 'reset' function
+	),
+    ZUNO_METER(
+	ZUNO_METER_TYPE_GAS,                // Gas meter
+	METER_RESET_ENABLE,                 // Provides meter reset function
+	ZUNO_METER_WATER_SCALE_PULSECOUNT,  // Unit is pulse count
+	METER_SIZE_FOUR_BYTES,              // 4-bytes precision
+	METER_PRECISION_ZERO_DECIMALS,      // 0 decimal places
+	get_pulses,                         // Pulses 'get' function
+	reset_pulses                        // Pulses 'reset' function
+	));
 
 // Product ID set here.  I made up this number at random.
 ZUNO_SETUP_PRODUCT_ID(0x7A, 0xC2);
@@ -567,60 +572,60 @@ uint32_t em4_count = 0;
 
 void update_wakeup_interval() {
 
-  // Fetch the last set wake-up period time.  This is hacky, not part of the official API.
-  EEPROM.get(EEPROM_WAKEUP_ADDR, &wakeup_period, sizeof(wakeup_period));
-  wakeup_period &= ((1 << 20) - 1);
+    // Fetch the last set wake-up period time.  This is hacky, not part of the official API.
+    EEPROM.get(EEPROM_WAKEUP_ADDR, &wakeup_period, sizeof(wakeup_period));
+    wakeup_period &= ((1 << 20) - 1);
 }
 
 // Returns the reason for a wakeup as a string.  As a side-effect, WUT_EM4
 // and EXT_EM4 increment the em4_count so can check whether EM4 state is
 // achieved.
 String wake_reason() {
-  byte wakeUpReason = zunoGetWakeReason();
-  switch (wakeUpReason) {
+    byte wakeUpReason = zunoGetWakeReason();
+    switch (wakeUpReason) {
     case ZUNO_WAKEUP_REASON_POR: return "power-on-reset";
     case ZUNO_WAKEUP_REASON_PIN: return "reset-button";
     case ZUNO_WAKEUP_REASON_EXT_EM4:
-      em4_count++;
-      return "ext-interrupt-em4";
+	em4_count++;
+	return "ext-interrupt-em4";
     case ZUNO_WAKEUP_REASON_EXT_EM2: return "ext-interrupt-em2";
     case ZUNO_WAKEUP_REASON_WUT_EM4:
-      em4_count++;
-      return "wakeup-timer-em4";
+	em4_count++;
+	return "wakeup-timer-em4";
     case ZUNO_WAKEUP_REASON_WUT_EM2: return "wakeup-timer-em2";
     case ZUNO_WAKEUP_REASON_RADIO_EM2: return "flirs-packet-em2";
     case ZUNO_WAKEUP_REASON_WATCH_DOG: return "watchdog";
     case ZUNO_WAKEUP_REASON_SOFTRESET: return "soft-reset";
     default: return "not-defined";
-  }
+    }
 }
 
 // Returns true if the device was last woken by a wake-timer.
 boolean woken_by_timer() {
 
-  // Wake reason
-  byte wake_up_reason = zunoGetWakeReason();
+    // Wake reason
+    byte wake_up_reason = zunoGetWakeReason();
 
-  // Wake-up from EM4 and EM2 states.
-  return (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM4) || (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM2);
+    // Wake-up from EM4 and EM2 states.
+    return (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM4) || (wake_up_reason == ZUNO_WAKEUP_REASON_WUT_EM2);
 }
 
 // Interrupt handler for button on pin 11, increments the interrupt count.
 // No de-bounce on the button, so click can result in multiple increemnts
 void interrupt() {
 
-  DWORD now = millis();
+    DWORD now = millis();
 
-  // Ignore multiple pulses in the de-bounce window.  This deals with extra
-  // pulses in the reed-switch open/close
-  if (since(last_pulse_millis, now) < debounce_time) return;
+    // Ignore multiple pulses in the de-bounce window.  This deals with extra
+    // pulses in the reed-switch open/close
+    if (since(last_pulse_millis, now) < debounce_time) return;
 
-  // Pulse is accepted, remember pulse time
-  last_pulse_millis = now;
+    // Pulse is accepted, remember pulse time
+    last_pulse_millis = now;
 
-  // Increase the reading.  This increases a delta value, don't want any
-  // slow EEPROM type stuff happening in this interrupt function.
-  inc_reading();
+    // Increase the reading.  This increases a delta value, don't want any
+    // slow EEPROM type stuff happening in this interrupt function.
+    inc_reading();
 }
 
 /****************************************************************************/
@@ -631,8 +636,8 @@ void wake_handler() {
 
 #ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
-  UART.println("*** WAKE!");
-  digitalWrite(LED_BUILTIN, 1);
+    UART.println("*** WAKE!");
+    digitalWrite(LED_BUILTIN, 1);
 #endif
 #endif
 }
@@ -640,20 +645,20 @@ void wake_handler() {
 void sleep_handler() {
 #ifdef UART
 #ifdef SLEEP_WAKE_DEBUG
-  UART.println("*** SLEEP!");
-  digitalWrite(LED_BUILTIN, 0);
+    UART.println("*** SLEEP!");
+    digitalWrite(LED_BUILTIN, 0);
 #endif
 #endif
-  zunoEM4EnablePinWakeup(PULSE_PIN);
+    zunoEM4EnablePinWakeup(PULSE_PIN);
 }
 
 #ifdef DEBUG_SYS_EVENT
 
 String event_type(uint8_t event) {
-  switch (event) {
+    switch (event) {
     case ZUNO_SYS_EVENT_QUICKWAKEUP:
-      return "quick-wakeup";
-      //   case ZUNO_SYS_EVENT_LEARNCOMPLETED: return "learn-completed";
+	return "quick-wakeup";
+	//   case ZUNO_SYS_EVENT_LEARNCOMPLETED: return "learn-completed";
     case ZUNO_SYS_EVENT_LEARNSTARTED: return "learn-started";
     case ZUNO_SYS_EVENT_SETDEFAULT: return "set-default";
     case ZUNO_SYS_EVENT_SLEEP_MODEEXC: return "sleep-modexec";
@@ -666,13 +671,13 @@ String event_type(uint8_t event) {
     case ZUNO_SYS_EVENT_INVALID_PARAMNUM_IN_SYSCALL: return "invalid-param-num";
     case ZUNO_SYS_EVENT_INVALID_SYSCALL_PARAM_VALUE: return "invalid-syscall";
     default: return "not-defined";
-  }
+    }
 }
 
 void sys_event(ZUNOSysEvent_t* e) {
 #ifdef UART
-  UART.print("-- sys-event ");
-  UART.println(event_type(e->event));
+    UART.print("-- sys-event ");
+    UART.println(event_type(e->event));
 #endif
 }
 
@@ -682,214 +687,218 @@ void sys_event(ZUNOSysEvent_t* e) {
 void setup() {
 
 #ifdef RESET_UART
-  RESET_UART.begin(115200);
-  RESET_UART.println("RESET");
-  RESET_UART.println(wake_reason());
-  byte wakeUpReason = zunoGetWakeReason();
-  if (wakeUpReason == ZUNO_WAKEUP_REASON_WATCH_DOG) {
-    RESET_UART.println("- WATCHDOG");
-  }
+    RESET_UART.begin(115200);
+    RESET_UART.println("RESET");
+    RESET_UART.println(wake_reason());
+    byte wakeUpReason = zunoGetWakeReason();
+    if (wakeUpReason == ZUNO_WAKEUP_REASON_WATCH_DOG) {
+	RESET_UART.println("- WATCHDOG");
+    }
 #endif
 
-  initial_meter_reading = zunoLoadCFGParam(INITIAL_METER_READING);
-  meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
-  debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
-  pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
+    initial_meter_reading = zunoLoadCFGParam(INITIAL_METER_READING);
+    meter_report_period = zunoLoadCFGParam(METER_REPORT_PERIOD);
+    debounce_time = zunoLoadCFGParam(DEBOUNCE_TIME);
+    pulse_increment = zunoLoadCFGParam(PULSE_INCREMENT);
 
-  update_wakeup_interval();
+    update_wakeup_interval();
 
-  // Debug stuff if debug is enabled
+    // Debug stuff if debug is enabled
 #ifdef UART
-  UART.begin(115200);
-  UART.println();
+    UART.begin(115200);
+    UART.println();
 
-  UART.println();
-  UART.println("Gas meter pulse sensor");
-  UART.println("======================");
-  UART.println();
+    UART.println();
+    UART.println("Gas meter pulse sensor");
+    UART.println("======================");
+    UART.println();
 
-  // Set UART to output debug data
-  UART.print("setup: called, ");
-  UART.println(wake_reason());
+    // Set UART to output debug data
+    UART.print("setup: called, ");
+    UART.println(wake_reason());
 
-  UART.print("Initial reading config = ");
-  UART.println(initial_meter_reading);
-  UART.print("Meter report period = ");
-  UART.println(meter_report_period);
-  UART.print("Pulse debounce time = ");
-  UART.println(debounce_time);
-  UART.print("Pulse increment = ");
-  UART.println(pulse_increment);
-  UART.print("Wake-up period = ");
-  UART.println(wakeup_period);
+    UART.print("Initial reading config = ");
+    UART.println(initial_meter_reading);
+    UART.print("Meter report period = ");
+    UART.println(meter_report_period);
+    UART.print("Pulse debounce time = ");
+    UART.println(debounce_time);
+    UART.print("Pulse increment = ");
+    UART.println(pulse_increment);
+    UART.print("Wake-up period = ");
+    UART.println(wakeup_period);
 
 #endif
 
-  // Initialise the reading
-  init_reading();
+    // Initialise the reading
+    init_reading();
 
-  // Configure pin 11 for an interrupt
-  zunoEM4EnablePinWakeup(PULSE_PIN);               // Not needed, according to ref,
-                                                   // pin 11 is already set up as an
-                                                   // EM4 wake
-  pinMode(PULSE_PIN, INPUT_PULLUP);                // Pin 11 pull-up mode
-  attachInterrupt(PULSE_PIN, interrupt, FALLING);  // Falling interrupt
+    // Configure pin 11 for an interrupt
+    zunoEM4EnablePinWakeup(PULSE_PIN);        // Not needed, according to ref
+    // pin 11 is already set up as an
+    // EM4 wake
+    pinMode(PULSE_PIN, INPUT_PULLUP);                // Pin 11 pull-up mode
+    attachInterrupt(PULSE_PIN, interrupt, FALLING);  // Falling interrupt
 
-  // Wake up in a few seeconds and provide an initial report
-  next_report_seconds(5);
-  zunoSendDeviceToSleep(SLEEP_MODE);  // Also probably not needed
+    // Wake up in a few seeconds and provide an initial report
+    next_report_seconds(5);
+    set_wakeup_timer();
+    zunoSendDeviceToSleep(SLEEP_MODE);       // Also probably not needed
 
-  // Calls to wake/sleep handlers
-  zunoAttachSysHandler(ZUNO_HANDLER_SLEEP, 0, (void*)&sleep_handler);
-  zunoAttachSysHandler(ZUNO_HANDLER_WUP, 0, (void*)&wake_handler);
+    // Calls to wake/sleep handlers
+    zunoAttachSysHandler(ZUNO_HANDLER_SLEEP, 0, (void*)&sleep_handler);
+    zunoAttachSysHandler(ZUNO_HANDLER_WUP, 0, (void*)&wake_handler);
 
 
 #ifdef DEBUG_SYS_EVENT
-  ZUNO_SETUP_SYSEVENT_HANDLER(sys_event);
+    ZUNO_SETUP_SYSEVENT_HANDLER(sys_event);
 #endif
+
 }
 
 // Core calls this repeatedly while awake
 void loop() {
 
-  DWORD now = millis();
+    DWORD now = millis();
 
 #ifdef UART
-  // Some debug output
+    // Some debug output
 
-  // Milliseconds since boot
-  UART.print("uptime = ");
-  UART.print(now);
+    // Milliseconds since boot
+    UART.print("uptime = ");
+    UART.print(now);
 
-  // Time to report
-  UART.print(" - next-report = ");
-  UART.print(next_report_millis);
+    // Time to report
+    UART.print(" - next-report = ");
+    UART.print(next_report_millis);
 
-  if (after(next_report_millis, now)) {
-    UART.print(" (!)");
-  }
+    if (after(next_report_millis, now)) {
+	UART.print(" (!)");
+    }
 
-  // Time to update state
-  UART.print(" - next-state-update = ");
-  UART.print(next_state_update_millis);
+    // Time to update state
+    UART.print(" - next-state-update = ");
+    UART.print(next_state_update_millis);
 
-  if (after(next_state_update_millis, now)) {
-    UART.print(" (!)");
-  }
+    if (after(next_state_update_millis, now)) {
+	UART.print(" (!)");
+    }
 
-  // Time to update state
-  UART.print(" - next-wake = ");
-  UART.print(next_send_wakeup_millis);
+    // Time to update state
+    UART.print(" - next-wake = ");
+    UART.print(next_send_wakeup_millis);
 
-  if (after(next_send_wakeup_millis, now)) {
-    UART.print(" (!)");
-  }
+    if (after(next_send_wakeup_millis, now)) {
+	UART.print(" (!)");
+    }
 
-  // Loop counter.  Should zero when device goes into EM4 state
-  UART.print(" - loop count = ");
-  UART.print(loop_count);
+    // Loop counter.  Should zero when device goes into EM4 state
+    UART.print(" - loop count = ");
+    UART.print(loop_count);
 
-  // Reading
-  UART.print(" - reading = ");
-  UART.print(get_reading());
+    // Reading
+    UART.print(" - reading = ");
+    UART.print(get_reading());
 
-  // Pulses
-  UART.print(" - pulses = ");
-  UART.print(get_pulses());
+    // Pulses
+    UART.print(" - pulses = ");
+    UART.print(get_pulses());
 
-  // Count of EM4 wake-ups, should also zero when device goes into EM4 state
-  UART.print(" - em4_count = ");
-  UART.print(em4_count);
+    // Count of EM4 wake-ups, should also zero when device goes into EM4 state
+    UART.print(" - em4_count = ");
+    UART.print(em4_count);
 
-  // Time since last interrupt in millis.
-  UART.print(" - since = ");
-  UART.print(since(last_pulse_millis, now));
+    // Time since last interrupt in millis.
+    UART.print(" - since = ");
+    UART.print(since(last_pulse_millis, now));
 
-  // Dump out last wake reason
-  UART.print(" - ");
-  UART.print(wake_reason());
+    // Dump out last wake reason
+    UART.print(" - ");
+    UART.print(wake_reason());
 
-  if (zunoInNetwork())
-    UART.print(" - in-network");
-  else
-    UART.print(" - not-in-network");
+    if (zunoInNetwork())
+	UART.print(" - in-network");
+    else
+	UART.print(" - not-in-network");
 
-  // Outputs sleep_locked if sleep locked
-  if (zunoIsSleepLocked())
-    UART.println(" - sleep-locked");
-  else
-    UART.println();
+    // Outputs sleep_locked if sleep locked
+    if (zunoIsSleepLocked())
+	UART.println(" - sleep-locked");
+    else
+	UART.println();
 
 #endif
 
-  // The loop has two main functions: update state to EEPROM, (keeps meter readings more accurate if there's a reset),
-  // and sending out Z-Wave unsolicited reports
+    // The loop has two main functions: update state to EEPROM, (keeps meter readings more accurate if there's a reset),
+    // and sending out Z-Wave unsolicited reports
 
-  // Update state if needed
-  if (after(next_state_update_millis, now)) {
+    // Update state if needed
+    if (after(next_state_update_millis, now)) {
 
 #ifdef UART
-    UART.println("State update");
+	UART.println("State update");
 #endif
 
-    // Updating EEPROM
-    persist();
+	// Updating EEPROM
+	persist();
 
-    next_state_update(STATE_UPDATE_PERIOD);
+	next_state_update(STATE_UPDATE_PERIOD);
 
-  }
+    }
 
-  // Time to send out a wakeup?
-  if (after(next_send_wakeup_millis, now)) {
-    // Send channel reports only if we're in a network
-    if (zunoInNetwork()) {
+    // Time to send out a wakeup?
+    if (after(next_send_wakeup_millis, now)) {
+	// Send channel reports only if we're in a network
+	if (zunoInNetwork()) {
 #ifdef UART
-      UART.println("Sending wake-up");
+	    UART.println("Sending wake-up");
 #endif
-      zunoLockSleep();
-      zunoSendWakeUpNotification();
+	    zunoLockSleep();
+	    zunoSendWakeUpNotification();
     
 
-    } else {
+	} else {
 #ifdef UART
-      UART.println("No wake-up, not in network");
+	    UART.println("No wake-up, not in network");
 #endif
+	}
+
+	update_wakeup_interval();
+
+	next_send_wakeup_seconds(wakeup_period);
+
     }
 
-    update_wakeup_interval();
-
-    next_send_wakeup_seconds(wakeup_period);
-
-  }
-
-  // Time to send out a report?
-  if (after(next_report_millis, now)) {
-    // Send channel reports only if we're in a network
-    if (zunoInNetwork()) {
+    // Time to send out a report?
+    if (after(next_report_millis, now)) {
+	// Send channel reports only if we're in a network
+	if (zunoInNetwork()) {
 #ifdef UART
-      UART.println("Sending report");
+	    UART.println("Sending report");
 #endif
 
-      zunoLockSleep();
-      zunoSendReport(1);
-      zunoSendReport(2);
-    } else {
+	    zunoLockSleep();
+	    zunoSendReport(1);
+	    zunoSendReport(2);
+	} else {
 #ifdef UART
-      UART.println("Not reporting, not in network");
+	    UART.println("Not reporting, not in network");
 #endif
+	}
+	next_report_seconds(meter_report_period);
+
     }
-    next_report_seconds(meter_report_period);
 
-  }
+    // Increment loop count
+    loop_count++;
 
-  // Increment loop count
-  loop_count++;
+    // Wait before leaving loop, in case we go straight back into loop,
+    // don't need a busy wait
+    delay(1000);
 
-  // Wait before leaving loop, in case we go straight back into loop, don't need a busy wait
-  delay(1000);
-
-  // Set the wakeup timer, will be earliest of state update and meter report time
-  set_wakeup_timer();
-  zunoSendDeviceToSleep(SLEEP_MODE);
+    // Set the wakeup timer, will be earliest of state update and meter
+    // report time
+    set_wakeup_timer();
+    zunoSendDeviceToSleep(SLEEP_MODE);
 
 }
